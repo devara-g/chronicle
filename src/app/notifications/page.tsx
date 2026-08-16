@@ -107,6 +107,7 @@ export default function NotificationsPage() {
                 <div className="w-8 flex justify-end pt-1 flex-shrink-0">
                   {notif.type === 'like' && <Heart className="w-5 h-5 text-rose-500 fill-rose-500" />}
                   {notif.type === 'repost' && <Repeat2 className="w-5 h-5 text-emerald-400" />}
+                  {notif.type === 'reply' && <Sparkles className="w-5 h-5 text-amber-400" />}
                   {notif.type === 'mention' && <AtSign className="w-5 h-5 text-white" />}
                   {notif.type === 'follow' && <UserPlus className="w-5 h-5 text-cyan-400" />}
                   {notif.type === 'message' && <Mail className="w-5 h-5 text-sky-400" />}
@@ -131,6 +132,7 @@ export default function NotificationsPage() {
                     <strong className="font-semibold">{notif.sender.full_name}</strong>{' '}
                     {notif.type === 'like' && 'liked your chronicle.'}
                     {notif.type === 'repost' && 'reposted your article.'}
+                    {notif.type === 'reply' && 'replied to your chronicle.'}
                     {notif.type === 'mention' && 'mentioned you in a post.'}
                     {notif.type === 'follow' && 'started following you.'}
                     {notif.type === 'message' && 'sent you a direct message.'}

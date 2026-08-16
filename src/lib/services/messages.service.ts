@@ -119,9 +119,7 @@ export const MessagesService = {
         await NotificationsService.createNotification(
           recipientId,
           senderId,
-          'message',
-          null,
-          content.trim().substring(0, 70)
+          'message'
         );
       }
 
@@ -136,12 +134,15 @@ export const MessagesService = {
   async markAsRead(conversationId: string, currentUserId: string): Promise<void> {
     if (!isSupabaseConfigured() || !conversationId || !currentUserId) return;
     try {
-      await supabase
+      const { error } = await supabase
         .from('messages')
         .update({ read: true })
         .eq('conversation_id', conversationId)
-        .neq('sender_id', currentUserId)
-        .eq('read', false);
+        .neq('sender_id', currentUserId);
+
+      if (error) {
+        console.error('Failed to mark messages as read:', error);
+      }
     } catch (e) {
       console.warn('Failed to mark messages as read:', e);
     }

@@ -65,20 +65,22 @@ export const NotificationsService = {
     userId: string,
     senderId: string,
     type: 'like' | 'repost' | 'reply' | 'mention' | 'follow' | 'message',
-    postId?: string | null,
-    snippet?: string | null
+    postId?: string | null
   ): Promise<void> {
     // Don't notify yourself
-    if (!isSupabaseConfigured() || userId === senderId) return;
+    if (!isSupabaseConfigured() || !userId || !senderId || userId === senderId) return;
     try {
-      await supabase.from('notifications').insert({
+      const { error } = await supabase.from('notifications').insert({
         user_id: userId,
         sender_id: senderId,
         type,
         post_id: postId || null,
-        post_snippet: snippet || null,
         read: false,
       });
+
+      if (error) {
+        console.error('Supabase error inserting notification:', error.message || error);
+      }
     } catch (e) {
       console.warn('Failed to create notification:', e);
     }
@@ -87,11 +89,14 @@ export const NotificationsService = {
   async markAllAsRead(userId: string): Promise<void> {
     if (!isSupabaseConfigured() || !userId) return;
     try {
-      await supabase
+      const { error } = await supabase
         .from('notifications')
         .update({ read: true })
-        .eq('user_id', userId)
-        .eq('read', false);
+        .eq('user_id', userId);
+
+      if (error) {
+        console.error('Failed to mark notifications as read:', error);
+      }
     } catch (e) {
       console.warn('Failed to mark notifications as read:', e);
     }
@@ -100,10 +105,14 @@ export const NotificationsService = {
   async markSingleAsRead(notificationId: string): Promise<void> {
     if (!isSupabaseConfigured() || !notificationId) return;
     try {
-      await supabase
+      const { error } = await supabase
         .from('notifications')
         .update({ read: true })
         .eq('id', notificationId);
+
+      if (error) {
+        console.error('Failed to mark single notification as read:', error);
+      }
     } catch (e) {
       console.warn('Failed to mark notification as read:', e);
     }

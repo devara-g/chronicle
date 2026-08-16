@@ -175,6 +175,12 @@ USING (EXISTS (
 ));
 CREATE POLICY "Users can send messages to their conversations" ON public.messages FOR INSERT 
 WITH CHECK (auth.uid() = sender_id);
+CREATE POLICY "Users can update messages in their conversations" ON public.messages FOR UPDATE 
+USING (EXISTS (
+    SELECT 1 FROM public.conversations 
+    WHERE conversations.id = messages.conversation_id 
+    AND (conversations.participant_one = auth.uid() OR conversations.participant_two = auth.uid())
+));
 
 -- ==============================================================================
 -- AUTOMATIC PROFILE CREATION TRIGGER ON SIGNUP

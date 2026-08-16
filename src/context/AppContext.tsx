@@ -284,8 +284,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       try {
         if (isLiked) {
           await supabase.from('likes').insert({ user_id: user.id, post_id: postId });
-          if (targetPost && targetPost.user_id !== user.id) {
-            await NotificationsService.createNotification(targetPost.user_id, user.id, 'like', postId);
+          
+          let authorId = targetPost?.user_id;
+          if (!authorId) {
+            const { data } = await supabase.from('posts').select('user_id').eq('id', postId).single();
+            authorId = data?.user_id;
+          }
+
+          if (authorId && authorId !== user.id) {
+            await NotificationsService.createNotification(authorId, user.id, 'like', postId);
           }
         } else {
           await supabase.from('likes').delete().eq('user_id', user.id).eq('post_id', postId);
@@ -316,8 +323,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       try {
         if (isReposted) {
           await supabase.from('reposts').insert({ user_id: user.id, post_id: postId });
-          if (targetPost && targetPost.user_id !== user.id) {
-            await NotificationsService.createNotification(targetPost.user_id, user.id, 'repost', postId);
+
+          let authorId = targetPost?.user_id;
+          if (!authorId) {
+            const { data } = await supabase.from('posts').select('user_id').eq('id', postId).single();
+            authorId = data?.user_id;
+          }
+
+          if (authorId && authorId !== user.id) {
+            await NotificationsService.createNotification(authorId, user.id, 'repost', postId);
           }
         } else {
           await supabase.from('reposts').delete().eq('user_id', user.id).eq('post_id', postId);
@@ -404,9 +418,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }));
 
       // Create reply notification for post author
-      const targetPost = posts.find(p => p.id === postId);
-      if (targetPost && targetPost.user_id !== user.id) {
-        await NotificationsService.createNotification(targetPost.user_id, user.id, 'reply', postId);
+      let authorId = posts.find(p => p.id === postId)?.user_id;
+      if (!authorId) {
+        const { data } = await supabase.from('posts').select('user_id').eq('id', postId).single();
+        authorId = data?.user_id;
+      }
+      if (authorId && authorId !== user.id) {
+        await NotificationsService.createNotification(authorId, user.id, 'reply', postId);
       }
     }
     return reply;
@@ -438,11 +456,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       prev.map(c => (c.id === conversationId ? { ...c, unread_count: 0 } : c))
     );
     await MessagesService.markAsRead(conversationId, user.id);
+
+    // Also mark related message notifications as read
+    setNotifications(prev =>
+      prev.map(n => (n.type === 'message' ? { ...n, read: true } : n))
+    );
+    if (isSupabaseConfigured()) {
+      await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('user_id', user.id)
+        .eq('type', 'message');
+    }
   }, [user]);
 
   const markAllMessagesAsRead = useCallback(async () => {
     if (!user) return;
     setConversations(prev => prev.map(c => ({ ...c, unread_count: 0 })));
+    setNotifications(prev =>
+      prev.map(n => (n.type === 'message' ? { ...n, read: true } : n))
+    );
     for (const conv of conversations) {
       if (conv.unread_count > 0) {
         await MessagesService.markAsRead(conv.id, user.id);
