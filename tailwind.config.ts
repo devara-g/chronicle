@@ -45,10 +45,10 @@ const config: Config = {
         "on-error-container": "#ffdad6",
       },
       fontFamily: {
-        headline: ["var(--font-hanken-grotesk)", "sans-serif"],
-        body: ["var(--font-inter)", "sans-serif"],
-        mono: ["var(--font-geist-mono)", "monospace"],
-        sans: ["var(--font-inter)", "sans-serif"],
+        headline: ["'Hanken Grotesk'", "system-ui", "-apple-system", "sans-serif"],
+        body: ["'Inter'", "system-ui", "-apple-system", "sans-serif"],
+        mono: ["'JetBrains Mono'", "ui-monospace", "monospace"],
+        sans: ["'Inter'", "system-ui", "-apple-system", "sans-serif"],
       },
       spacing: {
         "max-width-feed": "600px",

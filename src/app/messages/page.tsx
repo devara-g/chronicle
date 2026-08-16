@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import Image from 'next/image';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { AppShell } from '@/components/layout/AppShell';
@@ -21,7 +21,7 @@ import {
   User as UserIcon
 } from 'lucide-react';
 
-export default function MessagesPage() {
+function MessagesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const targetUserId = searchParams.get('user');
@@ -506,5 +506,19 @@ export default function MessagesPage() {
         </div>
       )}
     </AppShell>
+  );
+}
+
+export default function MessagesPage() {
+  return (
+    <Suspense fallback={
+      <AppShell fullWidth={true} hideRightSidebar={true}>
+        <div className="flex h-screen items-center justify-center text-xs font-mono text-on-surface-variant">
+          Loading messages...
+        </div>
+      </AppShell>
+    }>
+      <MessagesContent />
+    </Suspense>
   );
 }
