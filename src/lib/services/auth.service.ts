@@ -2,6 +2,22 @@ import { Profile } from '@/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 
 export const AuthService = {
+  // Sign in with Google OAuth
+  async signInWithGoogle() {
+    if (!isSupabaseConfigured()) return { error: new Error('Supabase not configured') };
+    const redirectTo = `${window.location.origin}/auth/callback`;
+    return await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
+      },
+    });
+  },
+
   // Get active user profile
   async getCurrentProfile(): Promise<Profile | null> {
     if (isSupabaseConfigured()) {

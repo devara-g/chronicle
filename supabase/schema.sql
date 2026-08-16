@@ -183,19 +183,61 @@ USING (EXISTS (
 ));
 
 -- ==============================================================================
--- AUTOMATIC PROFILE CREATION TRIGGER ON SIGNUP
+-- AUTOMATIC PROFILE CREATION TRIGGER ON SIGNUP / GOOGLE OAUTH
 -- ==============================================================================
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+    clean_username TEXT;
+    base_username TEXT;
+    avatar TEXT;
+    fname TEXT;
 BEGIN
+    -- Extract full name from Google metadata or raw user metadata
+    fname := COALESCE(
+        NEW.raw_user_meta_data->>'full_name',
+        NEW.raw_user_meta_data->>'name',
+        split_part(NEW.email, '@', 1),
+        'Chronicle User'
+    );
+
+    -- Extract avatar url from Google metadata (picture / avatar_url)
+    avatar := COALESCE(
+        NEW.raw_user_meta_data->>'avatar_url',
+        NEW.raw_user_meta_data->>'picture',
+        '/default-avatar.jpg'
+    );
+
+    -- Generate a clean unique username
+    base_username := COALESCE(
+        NEW.raw_user_meta_data->>'username',
+        lower(regexp_replace(split_part(NEW.email, '@', 1), '[^a-zA-Z0-9_]', '', 'g')),
+        'user'
+    );
+    
+    clean_username := base_username;
+
+    -- Ensure uniqueness in profiles
+    IF EXISTS (SELECT 1 FROM public.profiles WHERE username = clean_username AND id != NEW.id) THEN
+        clean_username := base_username || '_' || substr(NEW.id::text, 1, 4);
+    END IF;
+
     INSERT INTO public.profiles (id, username, full_name, avatar_url, bio)
     VALUES (
         NEW.id,
-        COALESCE(NEW.raw_user_meta_data->>'username', 'user_' || substr(NEW.id::text, 1, 8)),
-        COALESCE(NEW.raw_user_meta_data->>'full_name', 'Chronicle User'),
-        COALESCE(NEW.raw_user_meta_data->>'avatar_url', '/default-avatar.jpg'),
+        clean_username,
+        fname,
+        avatar,
         COALESCE(NEW.raw_user_meta_data->>'bio', 'Exploring the digital noir.')
-    );
+    )
+    ON CONFLICT (id) DO UPDATE SET
+        full_name = EXCLUDED.full_name,
+        avatar_url = CASE 
+            WHEN public.profiles.avatar_url = '/default-avatar.jpg' OR public.profiles.avatar_url IS NULL 
+            THEN EXCLUDED.avatar_url 
+            ELSE public.profiles.avatar_url 
+        END;
+        
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
