@@ -7,7 +7,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { useApp } from '@/context/AppContext';
 import { PostCard } from '@/components/feed/PostCard';
 import { formatNumber } from '@/lib/utils';
-import { ArrowLeft, Calendar, Link as LinkIcon } from 'lucide-react';
+import { ArrowLeft, Calendar, Link as LinkIcon, Mail } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Profile, Post } from '@/types';
 
@@ -117,16 +117,25 @@ export default function UserProfilePage() {
             )}
           </div>
 
-          <button
-            onClick={() => toggleFollow(profile.id)}
-            className={`px-6 py-2 rounded-full font-headline font-bold text-sm transition-all active:scale-95 ${
-              isFollowing
-                ? 'bg-white/10 border border-white/20 text-white hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30'
-                : 'bg-primary text-black hover:bg-white/90'
-            }`}
-          >
-            {isFollowing ? 'Following' : 'Follow'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push(`/messages?user=${profile.id}`)}
+              className="p-2 rounded-full border border-white/20 bg-white/5 hover:bg-white/10 text-white transition-all active:scale-95"
+              title={`Message ${profile.full_name}`}
+            >
+              <Mail className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => toggleFollow(profile.id)}
+              className={`px-6 py-2 rounded-full font-headline font-bold text-sm transition-all active:scale-95 ${
+                isFollowing
+                  ? 'bg-white/10 border border-white/20 text-white hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30'
+                  : 'bg-primary text-black hover:bg-white/90'
+              }`}
+            >
+              {isFollowing ? 'Following' : 'Follow'}
+            </button>
+          </div>
         </div>
 
         <div className="space-y-3">

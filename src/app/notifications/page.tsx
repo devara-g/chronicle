@@ -13,12 +13,13 @@ import {
   UserPlus, 
   CheckCheck,
   Settings,
-  Sparkles 
+  Sparkles,
+  Mail 
 } from 'lucide-react';
 
 export default function NotificationsPage() {
   const { notifications, markNotificationsRead, markSingleNotificationRead } = useApp();
-  const [filter, setFilter] = useState<'all' | 'mentions' | 'likes' | 'reposts'>('all');
+  const [filter, setFilter] = useState<'all' | 'mentions' | 'likes' | 'messages'>('all');
 
   // Auto-mark all unread notifications as read when viewing this page
   useEffect(() => {
@@ -31,7 +32,7 @@ export default function NotificationsPage() {
   const filteredNotifs = notifications.filter((n) => {
     if (filter === 'mentions') return n.type === 'mention';
     if (filter === 'likes') return n.type === 'like';
-    if (filter === 'reposts') return n.type === 'repost';
+    if (filter === 'messages') return n.type === 'message';
     return true;
   });
 
@@ -58,7 +59,7 @@ export default function NotificationsPage() {
 
         {/* Filter Tabs */}
         <div className="flex border-t border-white/[0.06]">
-          {(['all', 'mentions', 'likes', 'reposts'] as const).map((tab) => (
+          {(['all', 'mentions', 'likes', 'messages'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setFilter(tab)}
@@ -83,7 +84,12 @@ export default function NotificationsPage() {
           </div>
         ) : (
           filteredNotifs.map((notif) => {
-            const href = notif.post_id ? `/post/${notif.post_id}` : `/profile/${notif.sender.username}`;
+            const href = notif.type === 'message'
+              ? `/messages?user=${notif.sender_id}`
+              : notif.post_id 
+              ? `/post/${notif.post_id}` 
+              : `/profile/${notif.sender.username}`;
+
             return (
               <Link
                 key={notif.id}
@@ -103,13 +109,14 @@ export default function NotificationsPage() {
                   {notif.type === 'repost' && <Repeat2 className="w-5 h-5 text-emerald-400" />}
                   {notif.type === 'mention' && <AtSign className="w-5 h-5 text-white" />}
                   {notif.type === 'follow' && <UserPlus className="w-5 h-5 text-cyan-400" />}
+                  {notif.type === 'message' && <Mail className="w-5 h-5 text-sky-400" />}
                 </div>
 
                 {/* Content Column */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-2">
                     <Image
-                      src={notif.sender.avatar_url}
+                      src={notif.sender.avatar_url || '/default-avatar.jpg'}
                       alt={notif.sender.full_name}
                       width={32}
                       height={32}
@@ -126,6 +133,7 @@ export default function NotificationsPage() {
                     {notif.type === 'repost' && 'reposted your article.'}
                     {notif.type === 'mention' && 'mentioned you in a post.'}
                     {notif.type === 'follow' && 'started following you.'}
+                    {notif.type === 'message' && 'sent you a direct message.'}
                   </p>
 
                   {notif.post_snippet && (

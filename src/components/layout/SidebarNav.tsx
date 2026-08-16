@@ -20,7 +20,7 @@ import {
 
 export function SidebarNav() {
   const pathname = usePathname();
-  const { user, unreadNotifsCount, unreadMessagesCount, openCompose, markNotificationsRead } = useApp();
+  const { user, unreadNotifsCount, unreadMessagesCount, openCompose, markNotificationsRead, markAllMessagesAsRead } = useApp();
 
   const navItems = [
     { label: 'Home', href: '/', icon: Home, badge: 0 },
@@ -61,6 +61,9 @@ export function SidebarNav() {
               onClick={() => {
                 if (item.href === '/notifications' && unreadNotifsCount > 0) {
                   markNotificationsRead();
+                }
+                if (item.href === '/messages' && unreadMessagesCount > 0) {
+                  markAllMessagesAsRead();
                 }
               }}
               className={`flex items-center justify-between px-4 py-3 rounded-full transition-all duration-150 group ${

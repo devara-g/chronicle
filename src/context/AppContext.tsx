@@ -32,7 +32,10 @@ interface AppContextType {
   toggleFollow: (userId: string) => Promise<void>;
   addReply: (postId: string, content: string, parentReplyId?: string | null) => Promise<Reply | null>;
   getRepliesForPost: (postId: string) => Promise<Reply[]>;
-  sendMessage: (conversationId: string, content: string) => Message | null;
+  sendMessage: (conversationId: string, content: string) => Promise<Message | null>;
+  refreshConversations: () => Promise<void>;
+  markConversationAsRead: (conversationId: string) => Promise<void>;
+  markAllMessagesAsRead: () => Promise<void>;
   markNotificationsRead: () => Promise<void>;
   markSingleNotificationRead: (id: string) => Promise<void>;
   updateUserProfile: (data: Partial<Profile>) => Promise<void>;
@@ -58,16 +61,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const loadedProfile = await AuthService.getCurrentProfile();
         setUser(loadedProfile);
 
-        const [loadedPosts, followsData, notifData] = await Promise.all([
+        const [loadedPosts, followsData, notifData, loadedConvs] = await Promise.all([
           PostsService.getPosts(loadedProfile?.id),
           loadedProfile && isSupabaseConfigured()
             ? supabase.from('follows').select('following_id').eq('follower_id', loadedProfile.id)
             : Promise.resolve({ data: null }),
           loadedProfile ? NotificationsService.getNotifications(loadedProfile.id) : Promise.resolve([]),
+          loadedProfile ? MessagesService.getConversations(loadedProfile.id) : Promise.resolve([]),
         ]);
 
         setPosts(loadedPosts);
-        setConversations(MessagesService.getConversations());
+        setConversations(loadedConvs);
         if (followsData.data) {
           setFollowingIds(followsData.data.map((f: any) => f.following_id));
         }
@@ -154,6 +158,59 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       supabase.removeChannel(notifsChannel);
+    };
+  }, [user]);
+
+  // Realtime subscription for user's direct messages & conversations
+  useEffect(() => {
+    if (!isSupabaseConfigured() || !user) return;
+
+    const messagesGlobalChannel = supabase
+      .channel(`public:messages_global:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+        },
+        async (payload) => {
+          if (payload.new) {
+            const convs = await MessagesService.getConversations(user.id);
+            setConversations(convs);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'conversations',
+        },
+        async (payload) => {
+          if (payload.new && (payload.new.participant_one === user.id || payload.new.participant_two === user.id)) {
+            const convs = await MessagesService.getConversations(user.id);
+            setConversations(convs);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+        },
+        async () => {
+          const convs = await MessagesService.getConversations(user.id);
+          setConversations(convs);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(messagesGlobalChannel);
     };
   }, [user]);
 
@@ -359,12 +416,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return await PostsService.getReplies(postId);
   }, []);
 
-  const sendMessage = useCallback((conversationId: string, content: string): Message | null => {
+  const sendMessage = useCallback(async (conversationId: string, content: string): Promise<Message | null> => {
     if (!user) return null;
-    const msg = MessagesService.sendMessage(conversationId, user.id, content);
-    setConversations(MessagesService.getConversations());
+    const msg = await MessagesService.sendMessage(conversationId, user.id, content);
+    if (msg) {
+      const updatedConvs = await MessagesService.getConversations(user.id);
+      setConversations(updatedConvs);
+    }
     return msg;
   }, [user]);
+
+  const refreshConversations = useCallback(async () => {
+    if (!user) return;
+    const convs = await MessagesService.getConversations(user.id);
+    setConversations(convs);
+  }, [user]);
+
+  const markConversationAsRead = useCallback(async (conversationId: string) => {
+    if (!user || !conversationId) return;
+    setConversations(prev =>
+      prev.map(c => (c.id === conversationId ? { ...c, unread_count: 0 } : c))
+    );
+    await MessagesService.markAsRead(conversationId, user.id);
+  }, [user]);
+
+  const markAllMessagesAsRead = useCallback(async () => {
+    if (!user) return;
+    setConversations(prev => prev.map(c => ({ ...c, unread_count: 0 })));
+    for (const conv of conversations) {
+      if (conv.unread_count > 0) {
+        await MessagesService.markAsRead(conv.id, user.id);
+      }
+    }
+  }, [user, conversations]);
 
   const markNotificationsRead = useCallback(async () => {
     if (!user) return;
@@ -410,6 +494,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addReply,
     getRepliesForPost,
     sendMessage,
+    refreshConversations,
+    markConversationAsRead,
+    markAllMessagesAsRead,
     markNotificationsRead,
     markSingleNotificationRead,
     updateUserProfile,
@@ -434,6 +521,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     addReply,
     getRepliesForPost,
     sendMessage,
+    refreshConversations,
+    markConversationAsRead,
+    markAllMessagesAsRead,
     markNotificationsRead,
     markSingleNotificationRead,
     updateUserProfile

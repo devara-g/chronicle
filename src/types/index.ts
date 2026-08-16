@@ -46,7 +46,7 @@ export interface Notification {
   user_id: string;
   sender_id: string;
   sender: Profile;
-  type: 'like' | 'repost' | 'reply' | 'mention' | 'follow';
+  type: 'like' | 'repost' | 'reply' | 'mention' | 'follow' | 'message';
   post_id?: string;
   post_snippet?: string;
   read: boolean;

@@ -64,8 +64,9 @@ export const NotificationsService = {
   async createNotification(
     userId: string,
     senderId: string,
-    type: 'like' | 'repost' | 'reply' | 'mention' | 'follow',
-    postId?: string | null
+    type: 'like' | 'repost' | 'reply' | 'mention' | 'follow' | 'message',
+    postId?: string | null,
+    snippet?: string | null
   ): Promise<void> {
     // Don't notify yourself
     if (!isSupabaseConfigured() || userId === senderId) return;
@@ -75,6 +76,7 @@ export const NotificationsService = {
         sender_id: senderId,
         type,
         post_id: postId || null,
+        post_snippet: snippet || null,
         read: false,
       });
     } catch (e) {

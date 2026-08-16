@@ -234,14 +234,13 @@ export default function PostDetailPage() {
           </div>
         )}
 
-        {/* Timestamp & Views */}
+        {/* Timestamp & Platform */}
         <div className="flex items-center gap-2 py-3 text-xs text-on-surface-variant font-mono border-b border-white/10">
           <span>{new Date(post.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
           <span>·</span>
           <span>{new Date(post.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</span>
           <span>·</span>
-          <span className="text-white font-medium">{formatNumber(post.views_count || 14200)}</span>
-          <span>Views</span>
+          <span className="text-white/60">Chronicle for Web</span>
         </div>
 
         {/* Detailed Metrics Row */}
