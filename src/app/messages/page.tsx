@@ -31,12 +31,15 @@ function MessagesContent() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [searchUserQuery, setSearchUserQuery] = useState('');
   const [searchedUsers, setSearchedUsers] = useState<Profile[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [filterQuery, setFilterQuery] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const channelRef = useRef<any>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Set initial selected conversation on desktop
   useEffect(() => {
@@ -67,6 +70,7 @@ function MessagesContent() {
   useEffect(() => {
     if (!selectedConvId || !user) return;
 
+    setIsOtherTyping(false);
     let isMounted = true;
     async function loadChatMessages() {
       const msgs = await MessagesService.getMessages(selectedConvId);
@@ -82,12 +86,14 @@ function MessagesContent() {
     };
   }, [selectedConvId, user, markConversationAsRead]);
 
-  // Realtime subscription for incoming messages
+  // Realtime subscription for incoming messages and typing broadcast
   useEffect(() => {
     if (!selectedConvId || !isSupabaseConfigured()) return;
 
     const channel = supabase
-      .channel(`chat:${selectedConvId}`)
+      .channel(`chat:${selectedConvId}`, {
+        config: { broadcast: { self: false } },
+      })
       .on(
         'postgres_changes',
         {
@@ -103,15 +109,31 @@ function MessagesContent() {
               if (prev.some((m) => m.id === newMsg.id)) return prev;
               return [...prev, newMsg];
             });
+            setIsOtherTyping(false);
             if (user && newMsg.sender_id !== user.id) {
               MessagesService.markAsRead(selectedConvId, user.id);
             }
           }
         }
       )
+      .on('broadcast', { event: 'typing' }, (payload) => {
+        if (payload.payload?.userId !== user?.id) {
+          setIsOtherTyping(!!payload.payload?.isTyping);
+          if (payload.payload?.isTyping) {
+            if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+            typingTimeoutRef.current = setTimeout(() => {
+              setIsOtherTyping(false);
+            }, 3500);
+          }
+        }
+      })
       .subscribe();
 
+    channelRef.current = channel;
+
     return () => {
+      channelRef.current = null;
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       supabase.removeChannel(channel);
     };
   }, [selectedConvId, user]);
@@ -119,7 +141,7 @@ function MessagesContent() {
   // Auto scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, isOtherTyping]);
 
   // Search users for new chat
   useEffect(() => {
@@ -134,6 +156,19 @@ function MessagesContent() {
     return () => clearTimeout(timer);
   }, [searchUserQuery, isNewChatModalOpen, user]);
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const text = e.target.value;
+    setInputMessage(text);
+
+    if (channelRef.current && user && selectedConvId) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'typing',
+        payload: { userId: user.id, isTyping: text.trim().length > 0 },
+      });
+    }
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputMessage.trim() || !selectedConvId || !user || sending) return;
@@ -141,6 +176,14 @@ function MessagesContent() {
     const text = inputMessage.trim();
     setInputMessage('');
     setSending(true);
+
+    if (channelRef.current && user) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'typing',
+        payload: { userId: user.id, isTyping: false },
+      });
+    }
 
     try {
       const sentMsg = await sendMessage(selectedConvId, text);
@@ -380,6 +423,21 @@ function MessagesContent() {
                     </div>
                   );
                 })}
+
+                {/* Live Typing Indicator Animation */}
+                {isOtherTyping && (
+                  <div className="flex items-center gap-2.5 animate-fade-in pt-1">
+                    <div className="bg-white/10 border border-white/10 px-4 py-3 rounded-2xl rounded-tl-xs backdrop-blur-md flex items-center gap-1.5 shadow-sm">
+                      <span className="w-1.5 h-1.5 bg-white/80 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                      <span className="w-1.5 h-1.5 bg-white/80 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                      <span className="w-1.5 h-1.5 bg-white/80 rounded-full animate-bounce"></span>
+                    </div>
+                    <span className="text-[11px] font-mono text-on-surface-variant/80">
+                      {activeConversation.participant.full_name.split(' ')[0]} is typing...
+                    </span>
+                  </div>
+                )}
+
                 <div ref={messagesEndRef} />
               </div>
 
@@ -396,7 +454,7 @@ function MessagesContent() {
                   <input
                     type="text"
                     value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
+                    onChange={handleInputChange}
                     placeholder="Start a new message..."
                     autoFocus
                     className="flex-1 bg-transparent border-none text-white text-sm placeholder:text-outline focus:outline-none font-body px-2"
