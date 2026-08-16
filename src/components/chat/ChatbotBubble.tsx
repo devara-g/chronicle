@@ -19,7 +19,7 @@ export function ChatbotBubble() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useApp();
 
-  // Hide floating button completely on /messages to avoid blocking send/input controls
+  // Hide floating button on /messages to avoid cluttering chat window
   const isMessagesPage = pathname.startsWith('/messages');
 
   // Allow opening AI assistant via custom event from anywhere
@@ -31,7 +31,7 @@ export function ChatbotBubble() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,14 +63,14 @@ export function ChatbotBubble() {
         </div>
       )}
 
-      {/* AI Chat Window Modal */}
+      {/* AI Chat Window Modal (Full-screen on Mobile, Floating on Desktop) */}
       <div
-        className={`fixed bottom-0 right-0 md:bottom-8 md:right-8 w-full md:w-[380px] h-[100dvh] md:h-[540px] bg-black/90 backdrop-blur-2xl border-l md:border border-white/15 md:rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.9)] z-50 flex flex-col transition-all duration-300 ease-out origin-bottom-right ${
-          isOpen ? 'scale-100 opacity-100 translate-y-0' : 'scale-90 opacity-0 pointer-events-none translate-y-10 md:translate-y-0'
+        className={`fixed inset-0 md:inset-auto md:bottom-8 md:right-8 w-full md:w-[380px] h-[100dvh] md:h-[540px] bg-black/95 backdrop-blur-2xl border-l md:border border-white/15 md:rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.9)] z-[100] flex flex-col transition-all duration-300 ease-out origin-bottom-right ${
+          isOpen ? 'scale-100 opacity-100 translate-y-0 pointer-events-auto' : 'scale-95 opacity-0 pointer-events-none translate-y-10 md:translate-y-0'
         }`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3.5 border-b border-white/10 bg-white/[0.04]">
+        <div className="flex items-center justify-between px-4 py-3.5 border-b border-white/10 bg-white/[0.04] shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 bg-white/10 border border-white/15 rounded-lg flex items-center justify-center text-white">
               <Infinity className="w-4 h-4" />
@@ -82,14 +82,15 @@ export function ChatbotBubble() {
           </div>
           <button
             onClick={() => setIsOpen(false)}
-            className="p-1.5 hover:bg-white/10 text-on-surface-variant hover:text-white rounded-full transition-colors"
+            className="p-2 hover:bg-white/10 text-on-surface-variant hover:text-white rounded-full transition-colors active:scale-90"
+            title="Close"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5 md:w-4 md:h-4" />
           </button>
         </div>
 
         {/* Message History */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3.5 font-body [&::-webkit-scrollbar]:hidden">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3.5 font-body [&::-webkit-scrollbar]:hidden">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center px-4 my-auto py-8">
               <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white/60 mb-3">
@@ -155,7 +156,7 @@ export function ChatbotBubble() {
         </div>
 
         {/* Input Bar */}
-        <div className="p-3 bg-black/60 border-t border-white/10">
+        <div className="shrink-0 p-3 bg-black/90 border-t border-white/10 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <form onSubmit={handleSubmit} className="relative flex items-center">
             <input
               type="text"

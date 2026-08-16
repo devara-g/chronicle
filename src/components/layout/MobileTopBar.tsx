@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Sparkles } from 'lucide-react';
+import { ArrowLeft, Infinity } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useApp } from '@/context/AppContext';
@@ -43,9 +43,14 @@ export function MobileTopBar({ title, showBack = false, action }: MobileTopBarPr
 
       <div>
         {action || (
-          <div className="w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant">
-            <Sparkles className="w-4 h-4" />
-          </div>
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('open-ai-assistant'))}
+            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/10 text-on-surface-variant hover:text-white transition-colors"
+            title="Chronicle AI"
+            aria-label="Open Chronicle AI"
+          >
+            <Infinity className="w-4 h-4 text-white/80" />
+          </button>
         )}
       </div>
     </header>
