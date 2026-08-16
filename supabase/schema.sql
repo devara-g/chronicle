@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS public.notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     sender_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    type TEXT NOT NULL CHECK (type IN ('like', 'repost', 'reply', 'mention', 'follow')),
+    type TEXT NOT NULL CHECK (type IN ('like', 'repost', 'reply', 'mention', 'follow', 'message')),
     post_id UUID REFERENCES public.posts(id) ON DELETE CASCADE,
     read BOOLEAN DEFAULT false NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -96,6 +96,11 @@ CREATE TABLE IF NOT EXISTS public.messages (
     conversation_id UUID NOT NULL REFERENCES public.conversations(id) ON DELETE CASCADE,
     sender_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
+    media_url TEXT,
+    media_type TEXT,
+    audio_duration NUMERIC,
+    reply_to_id UUID REFERENCES public.messages(id) ON DELETE SET NULL,
+    is_edited BOOLEAN DEFAULT false NOT NULL,
     read BOOLEAN DEFAULT false NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );

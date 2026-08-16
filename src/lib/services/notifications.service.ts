@@ -79,7 +79,7 @@ export const NotificationsService = {
       });
 
       if (error) {
-        console.error('Supabase error inserting notification:', error.message || error);
+        console.warn('Supabase notification insert info:', error.message || error);
       }
     } catch (e) {
       console.warn('Failed to create notification:', e);

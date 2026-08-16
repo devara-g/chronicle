@@ -58,6 +58,18 @@ export interface Message {
   conversation_id: string;
   sender_id: string;
   content: string;
+  media_url?: string | null;
+  media_type?: 'image' | 'audio' | null;
+  audio_duration?: number | null;
+  reply_to_id?: string | null;
+  reply_to?: {
+    id: string;
+    sender_id: string;
+    sender_name: string;
+    content: string;
+    media_type?: 'image' | 'audio' | null;
+  } | null;
+  is_edited?: boolean;
   read: boolean;
   created_at: string;
 }

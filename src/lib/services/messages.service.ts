@@ -65,18 +65,66 @@ export const MessagesService = {
     }
   },
 
-  // Get messages for a specific conversation
+  // Get messages for a specific conversation with reply_to context
   async getMessages(conversationId: string): Promise<Message[]> {
     if (!isSupabaseConfigured() || !conversationId) return [];
     try {
+      // Fetch messages with sender profile info
       const { data, error } = await supabase
         .from('messages')
-        .select('*')
+        .select(`
+          *,
+          sender:profiles!sender_id (full_name)
+        `)
         .eq('conversation_id', conversationId)
         .order('created_at', { ascending: true });
 
-      if (error) throw error;
-      return data || [];
+      let messageList = data;
+
+      if (error || !data) {
+        // Fallback query if profiles join has issue
+        const { data: fallbackData } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('conversation_id', conversationId)
+          .order('created_at', { ascending: true });
+        messageList = fallbackData || [];
+      }
+
+      if (!messageList || messageList.length === 0) return [];
+
+      // Create lookup map for instant parent message resolution
+      const msgMap = new Map<string, any>();
+      messageList.forEach((m: any) => msgMap.set(m.id, m));
+
+      return messageList.map((m: any) => {
+        let replyObj = null;
+        if (m.reply_to_id && msgMap.has(m.reply_to_id)) {
+          const parent = msgMap.get(m.reply_to_id);
+          replyObj = {
+            id: parent.id,
+            sender_id: parent.sender_id,
+            sender_name: parent.sender?.full_name || 'User',
+            content: parent.content || '',
+            media_type: parent.media_type || null,
+          };
+        }
+
+        return {
+          id: m.id,
+          conversation_id: m.conversation_id,
+          sender_id: m.sender_id,
+          content: m.content,
+          media_url: m.media_url || null,
+          media_type: m.media_type || null,
+          audio_duration: m.audio_duration || null,
+          reply_to_id: m.reply_to_id || null,
+          reply_to: replyObj,
+          is_edited: m.is_edited || false,
+          read: m.read,
+          created_at: m.created_at,
+        };
+      });
     } catch (e) {
       console.warn('Failed to fetch messages:', e);
       return [];
@@ -84,17 +132,32 @@ export const MessagesService = {
   },
 
   // Send a message and update conversation timestamp
-  async sendMessage(conversationId: string, senderId: string, content: string): Promise<Message | null> {
+  async sendMessage(
+    conversationId: string,
+    senderId: string,
+    content: string,
+    mediaUrl?: string | null,
+    mediaType?: 'image' | 'audio' | null,
+    replyToId?: string | null,
+    audioDuration?: number | null
+  ): Promise<Message | null> {
     if (!isSupabaseConfigured()) return null;
     try {
+      const payload: any = {
+        conversation_id: conversationId,
+        sender_id: senderId,
+        content: (content || '').trim(),
+        read: false,
+      };
+
+      if (mediaUrl) payload.media_url = mediaUrl;
+      if (mediaType) payload.media_type = mediaType;
+      if (replyToId) payload.reply_to_id = replyToId;
+      if (audioDuration) payload.audio_duration = audioDuration;
+
       const { data, error } = await supabase
         .from('messages')
-        .insert({
-          conversation_id: conversationId,
-          sender_id: senderId,
-          content: content.trim(),
-          read: false,
-        })
+        .insert(payload)
         .select('*')
         .single();
 
@@ -127,6 +190,54 @@ export const MessagesService = {
     } catch (e) {
       console.error('Failed to send message:', e);
       return null;
+    }
+  },
+
+  // Edit message content
+  async editMessage(messageId: string, newContent: string): Promise<boolean> {
+    if (!isSupabaseConfigured() || !messageId) return false;
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .update({
+          content: newContent.trim(),
+          is_edited: true,
+        })
+        .eq('id', messageId);
+
+      if (error) {
+        console.error('Failed to edit message:', error);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.error('Failed to edit message:', e);
+      return false;
+    }
+  },
+
+  // Delete a message
+  async deleteMessage(messageId: string, mediaUrl?: string | null): Promise<boolean> {
+    if (!isSupabaseConfigured() || !messageId) return false;
+    try {
+      if (mediaUrl) {
+        const { StorageService } = await import('./storage.service');
+        await StorageService.deleteMedia(mediaUrl).catch(() => {});
+      }
+
+      const { error } = await supabase
+        .from('messages')
+        .delete()
+        .eq('id', messageId);
+
+      if (error) {
+        console.error('Failed to delete message:', error);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.error('Failed to delete message:', e);
+      return false;
     }
   },
 
@@ -191,8 +302,8 @@ export const MessagesService = {
       if (error) throw error;
       return data || [];
     } catch (e) {
-      console.warn('Failed to search users for chat:', e);
+      console.warn('Failed to search users:', e);
       return [];
     }
-  }
+  },
 };
