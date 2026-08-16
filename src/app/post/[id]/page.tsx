@@ -20,6 +20,7 @@ import {
   X,
   CornerDownRight
 } from 'lucide-react';
+import { ImageLightboxModal } from '@/components/ui/ImageLightboxModal';
 
 interface ReplyingTarget {
   id: string;
@@ -39,6 +40,7 @@ export default function PostDetailPage() {
   const [loadingReply, setLoadingReply] = useState(false);
   const [copied, setCopied] = useState(false);
   const [replyingTo, setReplyingTo] = useState<ReplyingTarget | null>(null);
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const replyInputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -222,16 +224,30 @@ export default function PostDetailPage() {
 
         {/* Media Attachment */}
         {post.media_url && (
-          <div className="rounded-2xl overflow-hidden border border-white/10 mb-4 bg-black/40">
-            <Image
-              src={post.media_url}
-              alt="Post media"
-              width={800}
-              height={600}
-              className="w-full h-auto max-h-[600px] object-contain hover:scale-[1.01] transition-transform duration-500"
-              loading="lazy"
+          <>
+            <div
+              onClick={() => setIsLightboxOpen(true)}
+              className="rounded-2xl overflow-hidden border border-white/10 mb-4 bg-black/40 cursor-pointer group/img relative"
+              title="Click to expand"
+            >
+              <Image
+                src={post.media_url}
+                alt="Post media"
+                width={800}
+                height={600}
+                className="w-full h-auto max-h-[600px] object-contain group-hover/img:scale-[1.01] transition-transform duration-300"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/15 transition-colors pointer-events-none" />
+            </div>
+
+            <ImageLightboxModal
+              isOpen={isLightboxOpen}
+              imageUrl={post.media_url}
+              altText={post.content.substring(0, 60) || 'Post media'}
+              onClose={() => setIsLightboxOpen(false)}
             />
-          </div>
+          </>
         )}
 
         {/* Timestamp & Platform */}
