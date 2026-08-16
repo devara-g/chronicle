@@ -1,0 +1,303 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import Image from 'next/image';
+import { AppShell } from '@/components/layout/AppShell';
+import { useApp } from '@/context/AppContext';
+import { Post, Reply } from '@/types';
+import { formatNumber } from '@/lib/utils';
+import { 
+  ArrowLeft, 
+  MessageSquare, 
+  Repeat2, 
+  Heart, 
+  Bookmark, 
+  Share, 
+  Check, 
+  Sparkles,
+  Image as ImageIcon
+} from 'lucide-react';
+
+export default function PostDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const postId = params.id as string;
+  const { posts, user, toggleLike, toggleRepost, toggleBookmark, addReply, getRepliesForPost } = useApp();
+
+  const [post, setPost] = useState<Post | undefined>(undefined);
+  const [replies, setReplies] = useState<Reply[]>([]);
+  const [replyText, setReplyText] = useState('');
+  const [loadingReply, setLoadingReply] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const found = posts.find(p => p.id === postId);
+    if (found) {
+      setPost(found);
+    }
+    async function loadReplies() {
+      const reps = await getRepliesForPost(postId);
+      setReplies(reps);
+    }
+    loadReplies();
+  }, [postId, posts]);
+
+  if (!post) {
+    return (
+      <AppShell>
+        <div className="p-8 text-center text-on-surface-variant font-mono text-xs">
+          Loading post or post not found...
+        </div>
+      </AppShell>
+    );
+  }
+
+  const handleReplySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!replyText.trim() || loadingReply) return;
+
+    setLoadingReply(true);
+    try {
+      const newReply = await addReply(postId, replyText.trim());
+      if (newReply) {
+        setReplies(prev => [...prev, newReply]);
+      }
+      setReplyText('');
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingReply(false);
+    }
+  };
+
+  const handleShare = () => {
+    if (typeof window !== 'undefined') {
+      navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  return (
+    <AppShell>
+      {/* Sticky Header with Back Button */}
+      <div className="sticky top-0 z-30 w-full bg-black/80 backdrop-blur-xl border-b border-white/10 flex items-center gap-6 h-14 px-4">
+        <button
+          onClick={() => router.back()}
+          className="p-2 -ml-2 rounded-full hover:bg-white/10 text-white transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <h1 className="font-headline text-lg font-bold text-primary tracking-tight">Post</h1>
+      </div>
+
+      {/* Main Post Content */}
+      <article className="p-4 md:p-6 border-b border-white/10">
+        {/* Author Header */}
+        <div className="flex items-center gap-3.5 mb-4">
+          <Link href={`/profile/${post.author?.username || 'user'}`}>
+            <Image
+              src={post.author?.avatar_url || '/default-avatar.jpg'}
+              alt={post.author?.full_name || 'user'}
+              width={48}
+              height={48}
+              className="w-12 h-12 rounded-full object-cover border border-white/10 transition-all"
+            />
+          </Link>
+          <div>
+            <Link
+              href={`/profile/${post.author?.username || 'user'}`}
+              className="font-headline font-bold text-white text-base hover:underline leading-tight block"
+            >
+              {post.author?.full_name}
+            </Link>
+            <span className="text-on-surface-variant text-xs font-mono">
+              @{post.author?.username}
+            </span>
+          </div>
+        </div>
+
+        {/* Post Text */}
+        <p className="text-white text-[18px] md:text-[20px] leading-relaxed font-body whitespace-pre-wrap mb-4">
+          {post.content}
+        </p>
+
+        {/* Media Attachment */}
+        {post.media_url && (
+          <div className="rounded-2xl overflow-hidden border border-white/10 mb-4 bg-black/40">
+            <Image
+              src={post.media_url}
+              alt="Post media"
+              width={800}
+              height={600}
+              className="w-full h-auto max-h-[600px] object-cover hover:scale-[1.02] transition-transform duration-500"
+              loading="lazy"
+            />
+          </div>
+        )}
+
+        {/* Timestamp & Views */}
+        <div className="flex items-center gap-2 py-3 text-xs text-on-surface-variant font-mono border-b border-white/10">
+          <span>{new Date(post.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+          <span>·</span>
+          <span>{new Date(post.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+          <span>·</span>
+          <span className="text-white font-medium">{formatNumber(post.views_count || 14200)}</span>
+          <span>Views</span>
+        </div>
+
+        {/* Detailed Metrics Row */}
+        <div className="flex items-center gap-6 py-3.5 border-b border-white/10 text-xs font-mono">
+          <div className="flex items-center gap-1.5">
+            <strong className="text-white font-semibold text-sm">{formatNumber(post.reposts_count)}</strong>
+            <span className="text-on-surface-variant">Reposts</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <strong className="text-white font-semibold text-sm">{formatNumber(post.likes_count)}</strong>
+            <span className="text-on-surface-variant">Likes</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <strong className="text-white font-semibold text-sm">{formatNumber(post.bookmarks_count)}</strong>
+            <span className="text-on-surface-variant">Bookmarks</span>
+          </div>
+        </div>
+
+        {/* Interactive Action Icons */}
+        <div className="flex justify-around items-center py-2.5 text-on-surface-variant">
+          <button
+            onClick={() => document.getElementById('reply-input')?.focus()}
+            className="p-2 rounded-full hover:bg-white/10 hover:text-white transition-colors"
+          >
+            <MessageSquare className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => toggleRepost(post.id)}
+            className={`p-2 rounded-full hover:bg-emerald-400/10 transition-colors ${
+              post.is_reposted ? 'text-emerald-400' : 'hover:text-emerald-400'
+            }`}
+          >
+            <Repeat2 className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => toggleLike(post.id)}
+            className={`p-2 rounded-full hover:bg-rose-500/10 transition-colors ${
+              post.is_liked ? 'text-rose-500' : 'hover:text-rose-500'
+            }`}
+          >
+            <Heart className={`w-5 h-5 ${post.is_liked ? 'fill-rose-500 stroke-rose-500' : ''}`} />
+          </button>
+          <button
+            onClick={() => toggleBookmark(post.id)}
+            className={`p-2 rounded-full hover:bg-cyan-400/10 transition-colors ${
+              post.is_bookmarked ? 'text-cyan-400' : 'hover:text-cyan-400'
+            }`}
+          >
+            <Bookmark className={`w-5 h-5 ${post.is_bookmarked ? 'fill-cyan-400 stroke-cyan-400' : ''}`} />
+          </button>
+          <button
+            onClick={handleShare}
+            className="p-2 rounded-full hover:bg-white/10 hover:text-white transition-colors"
+            title="Copy link"
+          >
+            {copied ? <Check className="w-5 h-5 text-emerald-400" /> : <Share className="w-5 h-5" />}
+          </button>
+        </div>
+      </article>
+
+      {/* Reply Input Box */}
+      {user ? (
+        <form onSubmit={handleReplySubmit} className="p-4 border-b border-white/10 flex gap-3.5 bg-black/40">
+          <Image
+            src={user.avatar_url || '/default-avatar.jpg'}
+            alt={user.full_name}
+            width={40}
+            height={40}
+            className="w-10 h-10 rounded-full object-cover border border-white/10 flex-shrink-0"
+          />
+          <div className="flex-1">
+            <textarea
+              id="reply-input"
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              placeholder="Post your reply..."
+              rows={2}
+              className="w-full bg-transparent border-none text-white text-base placeholder:text-outline focus:ring-0 resize-none outline-none font-body leading-relaxed"
+            />
+            <div className="flex justify-between items-center pt-2 border-t border-white/[0.06]">
+              <div className="flex items-center gap-1 text-on-surface-variant">
+                <button type="button" className="p-1.5 rounded-full hover:bg-white/10 hover:text-white">
+                  <ImageIcon className="w-4 h-4" />
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => setReplyText(prev => prev + ' 🖤')} 
+                  className="p-1.5 rounded-full hover:bg-white/10 hover:text-white"
+                >
+                  <Sparkles className="w-4 h-4" />
+                </button>
+              </div>
+              <button
+                type="submit"
+                disabled={!replyText.trim() || loadingReply}
+                className="bg-primary text-black font-headline font-bold py-1 px-4 rounded-full text-xs hover:bg-white/90 transition-all disabled:opacity-40"
+              >
+                {loadingReply ? 'Replying...' : 'Reply'}
+              </button>
+            </div>
+          </div>
+        </form>
+      ) : (
+        <div className="p-4 border-b border-white/10 text-center text-sm text-on-surface-variant">
+          <Link href="/login" className="text-primary hover:underline">Sign in</Link> to reply to this post.
+        </div>
+      )}
+
+      {/* Threaded Replies Stream */}
+      <div className="flex flex-col divide-y divide-white/10">
+        {replies.length === 0 ? (
+          <div className="p-8 text-center text-on-surface-variant text-xs font-mono">
+            No replies yet. Be the first to share your thoughts.
+          </div>
+        ) : (
+          replies.map((rep) => (
+            <div key={rep.id} className="p-4 flex gap-3.5 hover:bg-white/[0.02] transition-colors">
+              {/* Avatar + Thread line */}
+              <div className="flex flex-col items-center flex-shrink-0">
+                <Image
+                  src={rep.author?.avatar_url || '/default-avatar.jpg'}
+                  alt={rep.author?.full_name}
+                  width={40}
+                  height={40}
+                  className="w-10 h-10 rounded-full object-cover border border-white/10"
+                />
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-bold text-white text-sm">{rep.author?.full_name}</span>
+                  <span className="text-on-surface-variant text-xs font-mono">@{rep.author?.username}</span>
+                </div>
+                <p className="text-white text-sm leading-relaxed font-body mb-2.5">
+                  {rep.content}
+                </p>
+                <div className="flex items-center gap-6 text-on-surface-variant text-xs font-mono">
+                  <button className="flex items-center gap-1 hover:text-white transition-colors">
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>Reply</span>
+                  </button>
+                  <button className="flex items-center gap-1 hover:text-rose-500 transition-colors">
+                    <Heart className="w-3.5 h-3.5" />
+                    <span>{rep.likes_count || 0}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </AppShell>
+  );
+}

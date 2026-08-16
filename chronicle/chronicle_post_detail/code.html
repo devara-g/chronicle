@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Chronicle - Post Detail</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Hanken+Grotesk:wght@600;700&amp;family=Geist:wght@400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-tertiary-container": "#656464",
+                    "on-error-container": "#ffdad6",
+                    "tertiary-fixed": "#e5e2e1",
+                    "on-primary": "#2f3131",
+                    "primary-fixed-dim": "#c6c6c7",
+                    "on-primary-fixed": "#1a1c1c",
+                    "on-background": "#e2e2e2",
+                    "primary-fixed": "#e2e2e2",
+                    "on-secondary-container": "#b8b8b8",
+                    "secondary-fixed": "#e3e2e2",
+                    "on-tertiary-fixed-variant": "#474746",
+                    "surface-variant": "#353535",
+                    "primary-container": "#e2e2e2",
+                    "on-surface": "#e2e2e2",
+                    "outline-variant": "#444748",
+                    "on-primary-fixed-variant": "#454747",
+                    "secondary-container": "#484949",
+                    "on-primary-container": "#636565",
+                    "surface-container-high": "#2a2a2a",
+                    "on-tertiary-fixed": "#1c1b1b",
+                    "error-container": "#93000a",
+                    "secondary": "#c7c6c6",
+                    "outline": "#8e9192",
+                    "error": "#ffb4ab",
+                    "on-tertiary": "#313030",
+                    "primary": "#ffffff",
+                    "background": "#131313",
+                    "surface-container-lowest": "#0e0e0e",
+                    "on-secondary-fixed": "#1a1c1c",
+                    "on-secondary": "#2f3131",
+                    "surface-tint": "#c6c6c7",
+                    "surface-container-highest": "#353535",
+                    "secondary-fixed-dim": "#c7c6c6",
+                    "surface-container-low": "#1b1b1b",
+                    "inverse-primary": "#5d5f5f",
+                    "surface-bright": "#393939",
+                    "tertiary-container": "#e5e2e1",
+                    "surface-container": "#1f1f1f",
+                    "on-error": "#690005",
+                    "on-secondary-fixed-variant": "#464747",
+                    "on-surface-variant": "#c4c7c8",
+                    "tertiary": "#ffffff",
+                    "surface-dim": "#131313",
+                    "surface": "#131313",
+                    "inverse-surface": "#e2e2e2",
+                    "inverse-on-surface": "#303030",
+                    "tertiary-fixed-dim": "#c8c6c5"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "gutter": "16px",
+                    "max-width-feed": "600px",
+                    "margin-desktop": "24px",
+                    "sidebar-width": "280px",
+                    "unit": "4px",
+                    "margin-mobile": "16px"
+            },
+            "fontFamily": {
+                    "body-md": ["Inter"],
+                    "headline-xl": ["Hanken Grotesk"],
+                    "label-caps": ["Geist"],
+                    "headline-lg": ["Hanken Grotesk"],
+                    "headline-lg-mobile": ["Hanken Grotesk"],
+                    "body-sm": ["Inter"],
+                    "mono-sm": ["Geist"]
+            },
+            "fontSize": {
+                    "body-md": ["16px", {"lineHeight": "24px", "letterSpacing": "0em", "fontWeight": "400"}],
+                    "headline-xl": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "headline-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "headline-lg-mobile": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "mono-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        body {
+            background-color: #131313;
+            color: #e2e2e2;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex justify-center">
+<!-- Top App Bar (Mobile & Desktop) -->
+<header class="sticky top-0 z-50 w-full bg-background/80 backdrop-blur-md border-b border-white/10 md:hidden flex justify-between items-center h-16 px-4">
+<div class="flex items-center gap-4 text-primary">
+<button class="flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/5 transition-colors duration-150">
+<span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+</button>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile">Post</h1>
+</div>
+</header>
+<div class="flex w-full max-w-[1160px] mx-auto justify-center">
+<!-- Main Feed Canvas -->
+<main class="w-full md:max-w-max-width-feed border-x border-white/10 min-h-screen relative pb-24 md:pb-0">
+<!-- Desktop Header -->
+<div class="hidden md:flex sticky top-0 z-50 w-full bg-background/80 backdrop-blur-md border-b border-white/10 items-center h-16 px-4 gap-6">
+<button class="flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/5 transition-colors duration-150 text-primary">
+<span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+</button>
+<h1 class="font-headline-lg text-headline-lg text-primary">Post</h1>
+</div>
+<!-- Parent Post -->
+<article class="p-gutter md:p-margin-desktop border-b border-white/10">
+<div class="flex items-center gap-3 mb-4">
+<img alt="Avatar" class="w-12 h-12 rounded-full object-cover border border-white/10 bg-surface-container-high" data-alt="A small, circular avatar portrait of a modern minimalist designer in a dark room illuminated by a soft, cool glow from a monitor. High contrast black and white photography style with subtle digital glitch artifacts." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDlmudfa4KYNqMPH-s93KLJJ_mWsD6aRMGLiZtUj8oPbDvS4jtVwlJdzj6gjNTO6U6XnOvVNO5FcNX-dhrijM6x1JXBtcy_kaQFpRHyNwNCmKBDuF0Gj__tIytxBPX7-7mKQBCjIk_culM7fmXGQunQrqQCCOxnbvfV5p4P0KKh8VCLY1TMax9aFEUJFWK3_rxCsKmyo_bsZSZhKUSJC3oCIG1Tsft2zjy19gxvhQimtHf2Flqzolw"/>
+<div>
+<div class="font-body-md text-primary font-medium">Elena Rostova</div>
+<div class="font-body-sm text-on-surface-variant">@erostova</div>
+</div>
+</div>
+<div class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-primary mb-6 whitespace-pre-wrap">The silence of a well-designed system is deafening. 
+
+It shouldn't scream for your attention. It should anticipate your intent and recede into the background the moment it's fulfilled.</div>
+<div class="flex items-center gap-2 mb-4">
+<span class="font-body-sm text-on-surface-variant hover:underline cursor-pointer">10:42 PM</span>
+<span class="text-on-surface-variant text-[10px]">•</span>
+<span class="font-body-sm text-on-surface-variant hover:underline cursor-pointer">Oct 24, 2024</span>
+<span class="text-on-surface-variant text-[10px]">•</span>
+<span class="font-body-sm text-primary font-medium">14.2K</span> <span class="font-body-sm text-on-surface-variant">Views</span>
+</div>
+<!-- Engagement Stats -->
+<div class="flex items-center gap-6 py-4 border-t border-white/10">
+<div class="flex items-center gap-2 group cursor-pointer">
+<span class="font-body-md text-primary font-medium group-hover:underline">142</span>
+<span class="font-body-sm text-on-surface-variant">Reposts</span>
+</div>
+<div class="flex items-center gap-2 group cursor-pointer">
+<span class="font-body-md text-primary font-medium group-hover:underline">28</span>
+<span class="font-body-sm text-on-surface-variant">Quotes</span>
+</div>
+<div class="flex items-center gap-2 group cursor-pointer">
+<span class="font-body-md text-primary font-medium group-hover:underline">4,192</span>
+<span class="font-body-sm text-on-surface-variant">Likes</span>
+</div>
+<div class="flex items-center gap-2 group cursor-pointer">
+<span class="font-body-md text-primary font-medium group-hover:underline">89</span>
+<span class="font-body-sm text-on-surface-variant">Bookmarks</span>
+</div>
+</div>
+<!-- Action Bar -->
+<div class="flex justify-around items-center py-2 border-t border-b border-white/10 mt-4 -mx-gutter md:-mx-margin-desktop px-gutter md:px-margin-desktop">
+<button class="p-2 rounded-full text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-colors duration-150 flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="chat_bubble">chat_bubble</span>
+</button>
+<button class="p-2 rounded-full text-on-surface-variant hover:bg-secondary-container/50 hover:text-primary transition-colors duration-150 flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="repeat">repeat</span>
+</button>
+<button class="p-2 rounded-full text-on-surface-variant hover:bg-error/10 hover:text-error transition-colors duration-150 flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="favorite">favorite</span>
+</button>
+<button class="p-2 rounded-full text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-colors duration-150 flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="bookmark">bookmark</span>
+</button>
+<button class="p-2 rounded-full text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-colors duration-150 flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="share">share</span>
+</button>
+</div>
+</article>
+<!-- Reply Input -->
+<div class="p-gutter md:p-margin-desktop border-b border-white/10 flex gap-4 bg-surface-container-low/30 backdrop-blur-sm sticky md:static top-16 md:top-0 z-40">
+<img alt="Your Avatar" class="w-10 h-10 rounded-full object-cover border border-white/10 bg-surface-container-high flex-shrink-0" data-alt="A minimalist avatar placeholder showing a stark white silhouette of a geometric head and shoulders against a deep true black background. The edges are crisp and aliased, evoking an early digital aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBS4tlzFA55zZy22XpdqBBZ7qVBhRbvvcW-QYQvYA085ilJ_ziviliu2dlcuG7sRfmZpJG1Fe7Ony8r3dhyuL3sf0mZdmCIuKCWK_cXWwQVgeaIoBZoKrfUSBzxG4285q_pO5OyzPtim0JYQ19mKxxilaVvyeWV85vmu6cCglQF8rRXz0lSxdguSLHHnEVnrWsG_oDMzgAVfD4xcAavCWIRcvqsSIRLZmH0je4BHmFEJX7xcKxbGNI"/>
+<div class="flex-1">
+<textarea class="w-full bg-transparent border-none text-primary font-body-md placeholder:text-on-surface-variant focus:ring-0 resize-none h-12 pt-2" placeholder="Post your reply"></textarea>
+<div class="flex justify-between items-center mt-2 border-t border-white/10 pt-3">
+<div class="flex gap-1">
+<button class="w-8 h-8 rounded-full text-primary hover:bg-white/5 transition-colors duration-150 flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]" data-icon="image">image</span>
+</button>
+<button class="w-8 h-8 rounded-full text-primary hover:bg-white/5 transition-colors duration-150 flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]" data-icon="gif_box">gif_box</span>
+</button>
+<button class="w-8 h-8 rounded-full text-primary hover:bg-white/5 transition-colors duration-150 flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]" data-icon="sentiment_satisfied">sentiment_satisfied</span>
+</button>
+</div>
+<button class="bg-primary text-background font-body-sm font-medium px-4 py-1.5 rounded-full hover:bg-white/90 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed">Reply</button>
+</div>
+</div>
+</div>
+<!-- Threaded Replies -->
+<div class="flex flex-col">
+<!-- Reply 1 -->
+<div class="relative p-gutter md:p-margin-desktop border-b border-white/10 hover:bg-white/5 transition-colors duration-150 cursor-pointer flex gap-3">
+<div class="flex flex-col items-center">
+<img alt="User Avatar" class="w-10 h-10 rounded-full object-cover border border-white/10 bg-surface-container-high z-10" data-alt="A black and white abstract macro photograph of brushed steel texture. It serves as an avatar image. High contrast, sharp details, minimalist dark mode aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD70Sj88uCwNpv6ymqbPWYpNThD9sCnjuxj30ac6jTRhXw33oP5_FPRutUgSi1Ampu45lEcufV_BG9JqqLiuCqmXAGYVwbUa5OMVAsroeYLndHSZ2jLmozJYJ7gf7a3an9gwS69w6sqA3WMF2TH36kOfBCbzgBlUVXanuZwq8fV6421mZXjK7Y1GbduaCWOMIn3vWQp5uZqKj9UhrmssmcPiHEQzI7qD3-MGVeDQqmsl4rFtMK5GP4"/>
+<div class="w-[1px] h-full bg-white/10 mt-2"></div>
+</div>
+<div class="flex-1 pb-4">
+<div class="flex items-center gap-2 mb-1">
+<span class="font-body-sm text-primary font-medium">Marcus V</span>
+<span class="font-body-sm text-on-surface-variant">@mvius</span>
+<span class="font-body-sm text-on-surface-variant">·</span>
+<span class="font-body-sm text-on-surface-variant hover:underline">2h</span>
+</div>
+<div class="font-body-md text-on-background mb-3">Exactly. The best UI is invisible. When users start noticing the interface, it's usually because it's getting in their way.</div>
+<div class="flex items-center gap-6 text-on-surface-variant">
+<button class="flex items-center gap-1.5 hover:text-primary transition-colors duration-150 group">
+<span class="material-symbols-outlined text-[16px] group-hover:bg-primary/10 rounded-full p-1 -m-1" data-icon="chat_bubble">chat_bubble</span>
+<span class="font-body-sm text-[13px]">12</span>
+</button>
+<button class="flex items-center gap-1.5 hover:text-primary transition-colors duration-150 group">
+<span class="material-symbols-outlined text-[16px] group-hover:bg-secondary-container/50 rounded-full p-1 -m-1" data-icon="repeat">repeat</span>
+<span class="font-body-sm text-[13px]">4</span>
+</button>
+<button class="flex items-center gap-1.5 hover:text-error transition-colors duration-150 group">
+<span class="material-symbols-outlined text-[16px] group-hover:bg-error/10 rounded-full p-1 -m-1" data-icon="favorite">favorite</span>
+<span class="font-body-sm text-[13px]">142</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Nested Reply -->
+<div class="relative p-gutter md:p-margin-desktop border-b border-white/10 hover:bg-white/5 transition-colors duration-150 cursor-pointer flex gap-3">
+<div class="w-10 flex justify-center z-10">
+<!-- Empty space for indentation alignment with parent thread line -->
+</div>
+<div class="flex flex-col items-center ml-2">
+<img alt="User Avatar" class="w-10 h-10 rounded-full object-cover border border-white/10 bg-surface-container-high z-10" data-alt="A stark, minimalist profile picture featuring a single glowing neon blue dot against a void-like true black background. Subtle glassmorphic refraction around the dot's halo." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBNbdpRZh4q0ke4vRWb7ufNORnQe9VISjxDkwp6vMolAUkoGKnN9Ynx4f5VoITwZulCVN6a3WYKrahs8HAUB4B09G-XHntlrQp_EiDJKls2ub375IGV2_J6u9mVJhJvVWBFY_uFVCrXwqb3rFB7_LWiyxkMVyDF30VDQpEOYQWEtFFy4HAGDPHK8URKk6mxc83BNy5J6CxxVnyieJXlSRXOGnVsEnzrxLe22Qek231fAr6b5epPOi0"/>
+<div class="w-[1px] h-full bg-white/10 mt-2 opacity-0"></div> <!-- Hidden line to maintain spacing -->
+</div>
+<div class="flex-1 pb-4">
+<div class="flex items-center gap-2 mb-1">
+<span class="font-body-sm text-primary font-medium">Design Systems</span>
+<span class="font-body-sm text-on-surface-variant">@ds_weekly</span>
+<span class="font-body-sm text-on-surface-variant">·</span>
+<span class="font-body-sm text-on-surface-variant hover:underline">1h</span>
+</div>
+<div class="font-body-sm text-on-surface-variant mb-1">Replying to <span class="text-primary hover:underline">@mvius</span></div>
+<div class="font-body-md text-on-background mb-3">But how do you balance 'invisible' with brand identity? Sometimes the UI needs to signal trust through recognizable brand elements, even if it adds slight cognitive load.</div>
+<div class="flex items-center gap-6 text-on-surface-variant">
+<button class="flex items-center gap-1.5 hover:text-primary transition-colors duration-150 group">
+<span class="material-symbols-outlined text-[16px] group-hover:bg-primary/10 rounded-full p-1 -m-1" data-icon="chat_bubble">chat_bubble</span>
+<span class="font-body-sm text-[13px]">3</span>
+</button>
+<button class="flex items-center gap-1.5 hover:text-primary transition-colors duration-150 group">
+<span class="material-symbols-outlined text-[16px] group-hover:bg-secondary-container/50 rounded-full p-1 -m-1" data-icon="repeat">repeat</span>
+</button>
+<button class="flex items-center gap-1.5 hover:text-error transition-colors duration-150 group">
+<span class="material-symbols-outlined text-[16px] group-hover:bg-error/10 rounded-full p-1 -m-1" data-icon="favorite">favorite</span>
+<span class="font-body-sm text-[13px]">89</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>
