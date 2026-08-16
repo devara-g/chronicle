@@ -218,15 +218,15 @@ function MessagesContent() {
 
   return (
     <AppShell fullWidth={true} hideRightSidebar={true} hideMobileNav={!!selectedConvId}>
-      <div className="flex w-full h-screen overflow-hidden">
+      <div className="flex w-full h-[100dvh] md:h-screen overflow-hidden">
         {/* ======================================================== */}
         {/* Left Pane: Conversation List */}
         {/* ======================================================== */}
-        <div className={`w-full md:w-[360px] lg:w-[400px] flex-shrink-0 flex flex-col h-screen border-r border-white/10 bg-[#070707] ${
+        <div className={`w-full md:w-[360px] lg:w-[400px] flex-shrink-0 flex flex-col h-[100dvh] md:h-screen border-r border-white/10 bg-[#070707] ${
           selectedConvId ? 'hidden md:flex' : 'flex'
         }`}>
           {/* Header */}
-          <div className="h-16 px-4 border-b border-white/10 flex items-center justify-between sticky top-0 bg-[#070707]/90 backdrop-blur-xl z-20">
+          <div className="h-14 md:h-16 px-4 border-b border-white/10 flex items-center justify-between sticky top-0 bg-[#070707]/90 backdrop-blur-xl z-20 shrink-0">
             <h1 className="font-headline font-bold text-xl text-white tracking-tight">Messages</h1>
             <button 
               onClick={() => setIsNewChatModalOpen(true)}
@@ -238,7 +238,7 @@ function MessagesContent() {
           </div>
 
           {/* Search conversation bar */}
-          <div className="p-3 border-b border-white/5">
+          <div className="p-3 border-b border-white/5 shrink-0">
             <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-3.5 py-2 text-sm text-white focus-within:border-white/30 focus-within:bg-white/10 transition-all">
               <Search className="w-4 h-4 text-on-surface-variant flex-shrink-0" />
               <input
@@ -257,7 +257,7 @@ function MessagesContent() {
           </div>
 
           {/* Conversation List */}
-          <div className="flex-1 overflow-y-auto divide-y divide-white/5 p-2 space-y-1">
+          <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-white/5 p-2 space-y-1">
             {conversations.length === 0 ? (
               <div className="p-8 text-center space-y-4 my-auto">
                 <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-white/40">
@@ -330,13 +330,15 @@ function MessagesContent() {
         {/* ======================================================== */}
         {/* Right Pane: Chat Window */}
         {/* ======================================================== */}
-        <div className={`flex-1 flex flex-col h-screen bg-black ${
-          !selectedConvId ? 'hidden md:flex' : 'flex fixed inset-0 z-50 md:static'
+        <div className={`h-[100dvh] md:h-screen flex flex-col bg-black ${
+          !selectedConvId 
+            ? 'hidden md:flex md:flex-1' 
+            : 'fixed inset-0 z-50 w-full md:static md:flex-1'
         }`}>
           {activeConversation ? (
             <>
               {/* Chat Top Header */}
-              <div className="h-16 px-4 border-b border-white/10 flex items-center justify-between sticky top-0 bg-black/80 backdrop-blur-xl z-20">
+              <div className="h-14 md:h-16 px-4 border-b border-white/10 flex items-center justify-between sticky top-0 bg-black/90 backdrop-blur-xl z-20 shrink-0">
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setSelectedConvId('')}
@@ -379,7 +381,7 @@ function MessagesContent() {
               </div>
 
               {/* Message Stream */}
-              <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 space-y-4">
                 {/* Participant Bio Card in Thread */}
                 <div className="text-center py-8 space-y-2 border-b border-white/5 mb-4">
                   <Image
@@ -441,13 +443,13 @@ function MessagesContent() {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Message Input Bar */}
-              <div className="p-3 md:p-4 border-t border-white/10 bg-black/80 backdrop-blur-xl">
+              {/* Message Input Bar (Fixed & Visible at Mobile Bottom with Safe Area) */}
+              <div className="shrink-0 p-2.5 sm:p-3 md:p-4 border-t border-white/10 bg-black/95 backdrop-blur-2xl z-30 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                 <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex items-center gap-2 bg-white/5 border border-white/15 rounded-full px-3 py-1.5 focus-within:border-white/35 focus-within:bg-white/[0.08] transition-all shadow-[0_0_20px_rgba(0,0,0,0.5)]">
                   <button
                     type="button"
                     onClick={() => setInputMessage(prev => prev + ' 🖤')}
-                    className="p-2 rounded-full hover:bg-white/10 text-on-surface-variant hover:text-white transition-colors"
+                    className="p-1.5 sm:p-2 rounded-full hover:bg-white/10 text-on-surface-variant hover:text-white transition-colors shrink-0"
                   >
                     <Smile className="w-5 h-5" />
                   </button>
@@ -455,14 +457,13 @@ function MessagesContent() {
                     type="text"
                     value={inputMessage}
                     onChange={handleInputChange}
-                    placeholder="Start a new message..."
-                    autoFocus
-                    className="flex-1 bg-transparent border-none text-white text-sm placeholder:text-outline focus:outline-none font-body px-2"
+                    placeholder="Type a message..."
+                    className="flex-1 bg-transparent border-none text-white text-sm placeholder:text-outline focus:outline-none font-body px-2 min-w-0"
                   />
                   <button
                     type="submit"
                     disabled={!inputMessage.trim() || sending}
-                    className="p-2.5 bg-primary text-black rounded-full hover:bg-white/90 active:scale-95 transition-all disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center shadow-[0_0_15px_rgba(255,255,255,0.2)]"
+                    className="p-2 sm:p-2.5 bg-primary text-black rounded-full hover:bg-white/90 active:scale-95 transition-all disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center shadow-[0_0_15px_rgba(255,255,255,0.2)] shrink-0"
                     title="Send message"
                   >
                     <Send className="w-4 h-4" />
