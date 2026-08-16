@@ -12,6 +12,9 @@ interface EditProfileModalProps {
 
 export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
   const { user, updateUserProfile } = useApp();
+  const initialAvatarUrl = user?.avatar_url || '';
+  const initialBannerUrl = user?.banner_url || '';
+
   const [fullName, setFullName] = useState(user?.full_name || '');
   const [bio, setBio] = useState(user?.bio || '');
   const [website, setWebsite] = useState(user?.website || '');
@@ -24,12 +27,24 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
 
+  const deleteMediaSafe = async (url: string) => {
+    if (!url) return;
+    try {
+      const { StorageService } = await import('@/lib/services/storage.service');
+      await StorageService.deleteMedia(url);
+    } catch (err) {
+      console.warn('Could not delete media:', err);
+    }
+  };
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'avatar' | 'banner') => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
 
     const setUploading = type === 'avatar' ? setUploadingAvatar : setUploadingBanner;
     const setUrl = type === 'avatar' ? setAvatarUrl : setBannerUrl;
+    const currentUrl = type === 'avatar' ? avatarUrl : bannerUrl;
+    const initialUrl = type === 'avatar' ? initialAvatarUrl : initialBannerUrl;
     
     setUploading(true);
     try {
@@ -37,9 +52,14 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
       const { StorageService } = await import('@/lib/services/storage.service');
       
       const compressedFile = await compressImageToWebp(file, type === 'avatar' ? 400 : 1200);
-      const url = await StorageService.uploadMedia(compressedFile, user.id);
+      const newUrl = await StorageService.uploadMedia(compressedFile, user.id);
       
-      setUrl(url);
+      // If user uploaded an intermediate image in this session, delete it
+      if (currentUrl && currentUrl !== initialUrl) {
+        await deleteMediaSafe(currentUrl);
+      }
+
+      setUrl(newUrl);
     } catch (err) {
       console.error(`Failed to upload ${type}`, err);
       alert(`Failed to upload ${type}.`);
@@ -49,12 +69,34 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
     }
   };
 
-  if (!isOpen || !user) return null;
+  const handleClose = async () => {
+    // If user uploaded new avatar/banner but canceled without saving, delete the newly uploaded files
+    if (avatarUrl && avatarUrl !== initialAvatarUrl) {
+      await deleteMediaSafe(avatarUrl);
+    }
+    if (bannerUrl && bannerUrl !== initialBannerUrl) {
+      await deleteMediaSafe(bannerUrl);
+    }
+    onClose();
+  };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!user) return;
+
     setLoading(true);
     try {
+      // 1. If avatar changed, delete the old profile avatar from Supabase Storage
+      if (avatarUrl !== initialAvatarUrl && initialAvatarUrl) {
+        await deleteMediaSafe(initialAvatarUrl);
+      }
+
+      // 2. If banner changed, delete the old banner from Supabase Storage
+      if (bannerUrl !== initialBannerUrl && initialBannerUrl) {
+        await deleteMediaSafe(initialBannerUrl);
+      }
+
+      // 3. Save profile updates
       await updateUserProfile({
         full_name: fullName.trim(),
         bio: bio.trim(),
@@ -64,11 +106,13 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
       });
       onClose();
     } catch (err) {
-      console.error(err);
+      console.error('Failed to update profile:', err);
     } finally {
       setLoading(false);
     }
   };
+
+  if (!isOpen || !user) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
@@ -80,7 +124,7 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
           <div className="flex items-center gap-3">
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="p-1.5 rounded-full hover:bg-white/10 text-on-surface-variant hover:text-white transition-colors"
             >
               <X className="w-5 h-5" />
@@ -89,9 +133,9 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
           </div>
 
           <button
-            onClick={handleSave}
-            disabled={loading}
-            className="bg-primary text-black font-headline font-bold py-1.5 px-5 rounded-full text-xs hover:bg-white/90 transition-all disabled:opacity-50"
+            onClick={() => handleSave()}
+            disabled={loading || uploadingAvatar || uploadingBanner}
+            className="bg-primary text-black font-headline font-bold py-1.5 px-5 rounded-full text-xs hover:bg-white/90 active:scale-95 transition-all disabled:opacity-50"
           >
             {loading ? 'Saving...' : 'Save'}
           </button>
@@ -132,7 +176,7 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
           <div className="space-y-1.5">
             <label className="text-xs font-mono text-on-surface-variant uppercase tracking-wider">Avatar Image</label>
             <div className="flex items-center gap-4">
-              <div className="relative w-14 h-14 rounded-full overflow-hidden border border-white/20 group">
+              <div className="relative w-16 h-16 rounded-full overflow-hidden border border-white/20 group bg-black/40">
                 <Image
                   src={avatarUrl || '/default-avatar.jpg'}
                   alt="Avatar Preview"
@@ -146,7 +190,7 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
                   {uploadingAvatar ? (
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
-                    <Camera className="w-4 h-4 text-white" />
+                    <Camera className="w-5 h-5 text-white" />
                   )}
                 </div>
                 <input 
@@ -157,6 +201,13 @@ export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
                   className="hidden" 
                 />
               </div>
+              <button
+                type="button"
+                onClick={() => avatarInputRef.current?.click()}
+                className="text-xs font-mono text-white/80 hover:text-white px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors"
+              >
+                Change photo
+              </button>
             </div>
           </div>
 

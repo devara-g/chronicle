@@ -2,35 +2,63 @@ import { Post, Reply, Profile } from '@/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 
 export const PostsService = {
-  // Get all posts for feed
-  async getPosts(): Promise<Post[]> {
+  // Get all posts for feed with accurate counts from related tables
+  async getPosts(currentUserId?: string): Promise<Post[]> {
     if (isSupabaseConfigured()) {
       try {
         const { data, error } = await supabase
           .from('posts')
           .select(`
             *,
-            author:profiles!user_id (*)
+            author:profiles!user_id (*),
+            replies(count),
+            likes(count),
+            reposts(count),
+            bookmarks(count)
           `)
           .order('created_at', { ascending: false });
 
         if (!error && data && data.length > 0) {
-          return data.map((item: any) => ({
-            id: item.id,
-            user_id: item.user_id,
-            content: item.content,
-            media_url: item.media_url,
-            created_at: item.created_at,
-            author: item.author,
-            likes_count: item.likes_count || 0,
-            reposts_count: item.reposts_count || 0,
-            replies_count: item.replies_count || 0,
-            bookmarks_count: item.bookmarks_count || 0,
-            views_count: item.views_count || 120,
-            is_liked: false,
-            is_reposted: false,
-            is_bookmarked: false,
-          }));
+          // If user is logged in, optionally fetch which posts user liked/reposted/bookmarked
+          let userLikedPostIds = new Set<string>();
+          let userRepostedPostIds = new Set<string>();
+          let userBookmarkedPostIds = new Set<string>();
+
+          if (currentUserId) {
+            const [likesRes, repostsRes, bookmarksRes] = await Promise.all([
+              supabase.from('likes').select('post_id').eq('user_id', currentUserId),
+              supabase.from('reposts').select('post_id').eq('user_id', currentUserId),
+              supabase.from('bookmarks').select('post_id').eq('user_id', currentUserId),
+            ]);
+
+            if (likesRes.data) userLikedPostIds = new Set(likesRes.data.map(l => l.post_id));
+            if (repostsRes.data) userRepostedPostIds = new Set(repostsRes.data.map(r => r.post_id));
+            if (bookmarksRes.data) userBookmarkedPostIds = new Set(bookmarksRes.data.map(b => b.post_id));
+          }
+
+          return data.map((item: any) => {
+            const repliesCount = item.replies?.[0]?.count ?? 0;
+            const likesCount = item.likes?.[0]?.count ?? 0;
+            const repostsCount = item.reposts?.[0]?.count ?? 0;
+            const bookmarksCount = item.bookmarks?.[0]?.count ?? 0;
+
+            return {
+              id: item.id,
+              user_id: item.user_id,
+              content: item.content,
+              media_url: item.media_url,
+              created_at: item.created_at,
+              author: item.author,
+              likes_count: likesCount,
+              reposts_count: repostsCount,
+              replies_count: repliesCount,
+              bookmarks_count: bookmarksCount,
+              views_count: item.views_count || 120,
+              is_liked: userLikedPostIds.has(item.id),
+              is_reposted: userRepostedPostIds.has(item.id),
+              is_bookmarked: userBookmarkedPostIds.has(item.id),
+            };
+          });
         }
       } catch (e) {
         console.warn('Supabase fetch failed:', e);
@@ -65,33 +93,47 @@ export const PostsService = {
           .insert({
             user_id: user.id,
             content,
-            media_url: mediaUrl,
+            media_url: mediaUrl || null,
           })
-          .select('*, author:profiles!user_id(*)')
+          .select(`
+            *,
+            author:profiles!user_id (*)
+          `)
           .single();
 
         if (!error && data) {
           return {
-            ...newPost,
             id: data.id,
-            author: data.author || user,
+            user_id: data.user_id,
+            content: data.content,
+            media_url: data.media_url,
+            created_at: data.created_at,
+            author: data.author,
+            likes_count: 0,
+            reposts_count: 0,
+            replies_count: 0,
+            bookmarks_count: 0,
+            views_count: 1,
+            is_liked: false,
+            is_reposted: false,
+            is_bookmarked: false,
           };
         }
       } catch (e) {
-        console.warn('Supabase insert failed:', e);
+        console.error('Error saving post to Supabase:', e);
       }
     }
 
     return newPost;
   },
 
-  // Update a post
-  async updatePost(postId: string, userId: string, newContent: string): Promise<boolean> {
+  // Update existing post
+  async updatePost(postId: string, userId: string, content: string): Promise<boolean> {
     if (isSupabaseConfigured()) {
       try {
         const { error } = await supabase
           .from('posts')
-          .update({ content: newContent })
+          .update({ content, updated_at: new Date().toISOString() })
           .eq('id', postId)
           .eq('user_id', userId);
 
@@ -105,7 +147,7 @@ export const PostsService = {
     return true;
   },
 
-  // Delete a post
+  // Delete post
   async deletePost(postId: string, userId: string): Promise<boolean> {
     if (isSupabaseConfigured()) {
       try {
@@ -134,7 +176,14 @@ export const PostsService = {
       try {
         const { data, error } = await supabase
           .from('posts')
-          .select('*, author:profiles!user_id(*)')
+          .select(`
+            *,
+            author:profiles!user_id(*),
+            replies(count),
+            likes(count),
+            reposts(count),
+            bookmarks(count)
+          `)
           .eq('id', id)
           .single();
 
@@ -146,11 +195,14 @@ export const PostsService = {
             media_url: data.media_url,
             created_at: data.created_at,
             author: data.author,
-            likes_count: 0,
-            reposts_count: 0,
-            replies_count: 0,
-            bookmarks_count: 0,
-            views_count: 1,
+            likes_count: data.likes?.[0]?.count ?? 0,
+            reposts_count: data.reposts?.[0]?.count ?? 0,
+            replies_count: data.replies?.[0]?.count ?? 0,
+            bookmarks_count: data.bookmarks?.[0]?.count ?? 0,
+            views_count: data.views_count || 120,
+            is_liked: false,
+            is_reposted: false,
+            is_bookmarked: false,
           };
         }
       } catch (e) {
@@ -193,8 +245,39 @@ export const PostsService = {
   },
 
   // Add a reply
-  async createReply(postId: string, content: string, user: Profile, parentReplyId?: string | null): Promise<Reply> {
-    const newReply: Reply = {
+  async createReply(postId: string, content: string, user: Profile, parentReplyId?: string | null): Promise<Reply | null> {
+    if (isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase
+          .from('replies')
+          .insert({
+            post_id: postId,
+            user_id: user.id,
+            parent_reply_id: parentReplyId || null,
+            content,
+          })
+          .select('*, author:profiles!user_id(*)')
+          .single();
+
+        if (!error && data) {
+          return {
+            id: data.id,
+            post_id: data.post_id,
+            user_id: data.user_id,
+            parent_reply_id: data.parent_reply_id,
+            content: data.content,
+            created_at: data.created_at,
+            author: data.author,
+            likes_count: 0,
+            is_liked: false,
+          };
+        }
+      } catch (e) {
+        console.error('Error inserting reply to Supabase:', e);
+      }
+    }
+
+    return {
       id: `rep_${Date.now()}`,
       post_id: postId,
       user_id: user.id,
@@ -205,32 +288,5 @@ export const PostsService = {
       likes_count: 0,
       is_liked: false,
     };
-
-    if (isSupabaseConfigured()) {
-      try {
-        const { data, error } = await supabase
-          .from('replies')
-          .insert({
-            post_id: postId,
-            user_id: user.id,
-            parent_reply_id: parentReplyId,
-            content,
-          })
-          .select('*, author:profiles!user_id(*)')
-          .single();
-          
-        if (!error && data) {
-          return {
-             ...newReply,
-             id: data.id,
-             author: data.author || user
-          }
-        }
-      } catch (e) {
-        console.warn(e);
-      }
-    }
-
-    return newReply;
   },
 };

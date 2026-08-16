@@ -55,28 +55,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     async function loadData() {
       try {
-        const [loadedPosts, loadedProfile] = await Promise.all([
-          PostsService.getPosts(),
-          AuthService.getCurrentProfile(),
-        ]);
-        setPosts(loadedPosts);
+        const loadedProfile = await AuthService.getCurrentProfile();
         setUser(loadedProfile);
-        setConversations(MessagesService.getConversations());
 
-        // Load follows and notifications after we know who the user is
-        if (loadedProfile && isSupabaseConfigured()) {
-          const [followsData, notifData] = await Promise.all([
-            supabase
-              .from('follows')
-              .select('following_id')
-              .eq('follower_id', loadedProfile.id),
-            NotificationsService.getNotifications(loadedProfile.id),
-          ]);
-          if (followsData.data) {
-            setFollowingIds(followsData.data.map((f: any) => f.following_id));
-          }
-          setNotifications(notifData);
+        const [loadedPosts, followsData, notifData] = await Promise.all([
+          PostsService.getPosts(loadedProfile?.id),
+          loadedProfile && isSupabaseConfigured()
+            ? supabase.from('follows').select('following_id').eq('follower_id', loadedProfile.id)
+            : Promise.resolve({ data: null }),
+          loadedProfile ? NotificationsService.getNotifications(loadedProfile.id) : Promise.resolve([]),
+        ]);
+
+        setPosts(loadedPosts);
+        setConversations(MessagesService.getConversations());
+        if (followsData.data) {
+          setFollowingIds(followsData.data.map((f: any) => f.following_id));
         }
+        setNotifications(notifData);
       } catch (err) {
         console.error('Failed loading app data:', err);
       } finally {
@@ -212,59 +207,98 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return success;
   }, [user, posts]);
 
-  const toggleLike = useCallback((postId: string) => {
-    if (!user) return; // Must login to like
-    setPosts(prev => {
-      const updated = prev.map(post => {
-        if (post.id === postId) {
-          const isLiked = !post.is_liked;
-          return {
-            ...post,
-            is_liked: isLiked,
-            likes_count: Math.max(0, post.likes_count + (isLiked ? 1 : -1)),
-          };
-        }
-        return post;
-      });
-      return updated;
-    });
-  }, [user]);
-
-  const toggleRepost = useCallback((postId: string) => {
+  const toggleLike = useCallback(async (postId: string) => {
     if (!user) return;
-    setPosts(prev => {
-      const updated = prev.map(post => {
-        if (post.id === postId) {
-          const isReposted = !post.is_reposted;
-          return {
-            ...post,
-            is_reposted: isReposted,
-            reposts_count: Math.max(0, post.reposts_count + (isReposted ? 1 : -1)),
-          };
-        }
-        return post;
-      });
-      return updated;
-    });
-  }, [user]);
+    const targetPost = posts.find(p => p.id === postId);
+    const isLiked = targetPost ? !targetPost.is_liked : true;
 
-  const toggleBookmark = useCallback((postId: string) => {
-    if (!user) return;
-    setPosts(prev => {
-      const updated = prev.map(post => {
-        if (post.id === postId) {
-          const isBookmarked = !post.is_bookmarked;
-          return {
-            ...post,
-            is_bookmarked: isBookmarked,
-            bookmarks_count: Math.max(0, post.bookmarks_count + (isBookmarked ? 1 : -1)),
-          };
+    setPosts(prev => prev.map(post => {
+      if (post.id === postId) {
+        return {
+          ...post,
+          is_liked: isLiked,
+          likes_count: Math.max(0, (post.likes_count || 0) + (isLiked ? 1 : -1)),
+        };
+      }
+      return post;
+    }));
+
+    if (isSupabaseConfigured()) {
+      try {
+        if (isLiked) {
+          await supabase.from('likes').insert({ user_id: user.id, post_id: postId });
+          if (targetPost && targetPost.user_id !== user.id) {
+            await NotificationsService.createNotification(targetPost.user_id, user.id, 'like', postId);
+          }
+        } else {
+          await supabase.from('likes').delete().eq('user_id', user.id).eq('post_id', postId);
         }
-        return post;
-      });
-      return updated;
-    });
-  }, [user]);
+      } catch (err) {
+        console.error('Failed to toggle like:', err);
+      }
+    }
+  }, [user, posts]);
+
+  const toggleRepost = useCallback(async (postId: string) => {
+    if (!user) return;
+    const targetPost = posts.find(p => p.id === postId);
+    const isReposted = targetPost ? !targetPost.is_reposted : true;
+
+    setPosts(prev => prev.map(post => {
+      if (post.id === postId) {
+        return {
+          ...post,
+          is_reposted: isReposted,
+          reposts_count: Math.max(0, (post.reposts_count || 0) + (isReposted ? 1 : -1)),
+        };
+      }
+      return post;
+    }));
+
+    if (isSupabaseConfigured()) {
+      try {
+        if (isReposted) {
+          await supabase.from('reposts').insert({ user_id: user.id, post_id: postId });
+          if (targetPost && targetPost.user_id !== user.id) {
+            await NotificationsService.createNotification(targetPost.user_id, user.id, 'repost', postId);
+          }
+        } else {
+          await supabase.from('reposts').delete().eq('user_id', user.id).eq('post_id', postId);
+        }
+      } catch (err) {
+        console.error('Failed to toggle repost:', err);
+      }
+    }
+  }, [user, posts]);
+
+  const toggleBookmark = useCallback(async (postId: string) => {
+    if (!user) return;
+    const targetPost = posts.find(p => p.id === postId);
+    const isBookmarked = targetPost ? !targetPost.is_bookmarked : true;
+
+    setPosts(prev => prev.map(post => {
+      if (post.id === postId) {
+        return {
+          ...post,
+          is_bookmarked: isBookmarked,
+          bookmarks_count: Math.max(0, (post.bookmarks_count || 0) + (isBookmarked ? 1 : -1)),
+        };
+      }
+      return post;
+    }));
+
+    if (isSupabaseConfigured()) {
+      try {
+        if (isBookmarked) {
+          await supabase.from('bookmarks').insert({ user_id: user.id, post_id: postId });
+        } else {
+          await supabase.from('bookmarks').delete().eq('user_id', user.id).eq('post_id', postId);
+        }
+      } catch (err) {
+        console.error('Failed to toggle bookmark:', err);
+      }
+    }
+  }, [user, posts]);
 
   const toggleFollow = useCallback(async (userId: string) => {
     if (!user) return;
@@ -304,17 +338,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const addReply = useCallback(async (postId: string, content: string, parentReplyId?: string | null): Promise<Reply | null> => {
     if (!user) return null;
     const reply = await PostsService.createReply(postId, content, user, parentReplyId);
-    setPosts(prev => {
-      const updated = prev.map(p => {
+    if (reply) {
+      setPosts(prev => prev.map(p => {
         if (p.id === postId) {
-          return { ...p, replies_count: p.replies_count + 1 };
+          return { ...p, replies_count: (p.replies_count || 0) + 1 };
         }
         return p;
-      });
-      return updated;
-    });
+      }));
+
+      // Create reply notification for post author
+      const targetPost = posts.find(p => p.id === postId);
+      if (targetPost && targetPost.user_id !== user.id) {
+        await NotificationsService.createNotification(targetPost.user_id, user.id, 'reply', postId);
+      }
+    }
     return reply;
-  }, [user]);
+  }, [user, posts]);
 
   const getRepliesForPost = useCallback(async (postId: string) => {
     return await PostsService.getReplies(postId);

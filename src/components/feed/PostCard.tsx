@@ -8,7 +8,7 @@ import { Post } from '@/types';
 import { useApp } from '@/context/AppContext';
 import { formatTimeAgo, formatNumber } from '@/lib/utils';
 import { 
-  MessageSquare, 
+  MessageCircle, 
   Repeat2, 
   Heart, 
   Bookmark, 
@@ -182,19 +182,22 @@ export function PostCard({ post, showBorder = true }: PostCardProps) {
         )}
 
         {/* Engagement Action Bar */}
-        <div className="flex justify-between items-center text-on-surface-variant max-w-md pt-1">
+        <div className="flex justify-between items-center text-on-surface-variant max-w-md pt-2 select-none">
           {/* Reply */}
           <button
             onClick={(e) => {
               e.stopPropagation();
               router.push(`/post/${post.id}`);
             }}
-            className="flex items-center gap-1.5 group/btn hover:text-white transition-colors"
+            className="flex items-center gap-1.5 group/btn text-white/50 hover:text-sky-400 transition-all active:scale-95 py-1 px-1.5 -ml-1.5 rounded-full"
+            title="Reply"
           >
-            <div className="p-2 rounded-full group-hover/btn:bg-white/10 transition-colors -ml-2">
-              <MessageSquare className="w-4 h-4" />
+            <div className="p-1.5 rounded-full group-hover/btn:bg-sky-400/10 group-hover/btn:scale-110 active:scale-90 transition-all duration-200">
+              <MessageCircle className="w-[18px] h-[18px] stroke-[1.8] transition-transform duration-200 group-hover/btn:-rotate-6" />
             </div>
-            <span className="text-xs font-mono">{formatNumber(post.replies_count)}</span>
+            <span className="text-[13px] font-sans font-medium group-hover/btn:text-sky-400 transition-colors">
+              {formatNumber(post.replies_count)}
+            </span>
           </button>
 
           {/* Repost */}
@@ -203,14 +206,21 @@ export function PostCard({ post, showBorder = true }: PostCardProps) {
               e.stopPropagation();
               toggleRepost(post.id);
             }}
-            className={`flex items-center gap-1.5 group/btn transition-colors ${
-              post.is_reposted ? 'text-emerald-400' : 'hover:text-emerald-400'
+            className={`flex items-center gap-1.5 group/btn transition-all active:scale-95 py-1 px-1.5 rounded-full ${
+              post.is_reposted ? 'text-emerald-400' : 'text-white/50 hover:text-emerald-400'
             }`}
+            title="Repost"
           >
-            <div className="p-2 rounded-full group-hover/btn:bg-emerald-400/10 transition-colors -ml-2">
-              <Repeat2 className="w-4 h-4" />
+            <div className="p-1.5 rounded-full group-hover/btn:bg-emerald-400/10 group-hover/btn:scale-110 active:scale-90 transition-all duration-200">
+              <Repeat2 className={`w-[18px] h-[18px] stroke-[1.8] transition-all duration-300 group-hover/btn:rotate-45 active:rotate-180 ${
+                post.is_reposted ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.6)]' : ''
+              }`} />
             </div>
-            <span className="text-xs font-mono">{formatNumber(post.reposts_count)}</span>
+            <span className={`text-[13px] font-sans font-medium transition-colors ${
+              post.is_reposted ? 'text-emerald-400 font-semibold' : 'group-hover/btn:text-emerald-400'
+            }`}>
+              {formatNumber(post.reposts_count)}
+            </span>
           </button>
 
           {/* Like */}
@@ -219,14 +229,23 @@ export function PostCard({ post, showBorder = true }: PostCardProps) {
               e.stopPropagation();
               toggleLike(post.id);
             }}
-            className={`flex items-center gap-1.5 group/btn transition-colors ${
-              post.is_liked ? 'text-rose-500' : 'hover:text-rose-500'
+            className={`flex items-center gap-1.5 group/btn transition-all active:scale-90 py-1 px-1.5 rounded-full ${
+              post.is_liked ? 'text-rose-500' : 'text-white/50 hover:text-rose-500'
             }`}
+            title="Like"
           >
-            <div className="p-2 rounded-full group-hover/btn:bg-rose-500/10 transition-colors -ml-2">
-              <Heart className={`w-4 h-4 ${post.is_liked ? 'fill-rose-500 stroke-rose-500' : ''}`} />
+            <div className="p-1.5 rounded-full group-hover/btn:bg-rose-500/10 group-hover/btn:scale-120 active:scale-75 transition-all duration-200">
+              <Heart className={`w-[18px] h-[18px] stroke-[1.8] transition-all duration-200 ${
+                post.is_liked 
+                  ? 'fill-rose-500 stroke-rose-500 drop-shadow-[0_0_10px_rgba(244,63,94,0.7)] scale-110 animate-scale-in' 
+                  : 'group-hover/btn:stroke-rose-400'
+              }`} />
             </div>
-            <span className="text-xs font-mono">{formatNumber(post.likes_count)}</span>
+            <span className={`text-[13px] font-sans font-medium transition-colors ${
+              post.is_liked ? 'text-rose-500 font-semibold' : 'group-hover/btn:text-rose-500'
+            }`}>
+              {formatNumber(post.likes_count)}
+            </span>
           </button>
 
           {/* Bookmark */}
@@ -235,27 +254,38 @@ export function PostCard({ post, showBorder = true }: PostCardProps) {
               e.stopPropagation();
               toggleBookmark(post.id);
             }}
-            className={`flex items-center gap-1.5 group/btn transition-colors ${
-              post.is_bookmarked ? 'text-cyan-400' : 'hover:text-cyan-400'
+            className={`flex items-center gap-1.5 group/btn transition-all active:scale-95 py-1 px-1.5 rounded-full ${
+              post.is_bookmarked ? 'text-cyan-400' : 'text-white/50 hover:text-cyan-400'
             }`}
+            title="Bookmark"
           >
-            <div className="p-2 rounded-full group-hover/btn:bg-cyan-400/10 transition-colors -ml-2">
-              <Bookmark className={`w-4 h-4 ${post.is_bookmarked ? 'fill-cyan-400 stroke-cyan-400' : ''}`} />
+            <div className="p-1.5 rounded-full group-hover/btn:bg-cyan-400/10 group-hover/btn:scale-115 active:scale-75 transition-all duration-200">
+              <Bookmark className={`w-[18px] h-[18px] stroke-[1.8] transition-all duration-200 ${
+                post.is_bookmarked 
+                  ? 'fill-cyan-400 stroke-cyan-400 drop-shadow-[0_0_10px_rgba(34,211,238,0.7)] scale-105' 
+                  : 'group-hover/btn:stroke-cyan-300'
+              }`} />
             </div>
             {post.bookmarks_count > 0 && (
-              <span className="text-xs font-mono">{formatNumber(post.bookmarks_count)}</span>
+              <span className={`text-[13px] font-sans font-medium transition-colors ${
+                post.is_bookmarked ? 'text-cyan-400 font-semibold' : 'group-hover/btn:text-cyan-400'
+              }`}>
+                {formatNumber(post.bookmarks_count)}
+              </span>
             )}
           </button>
 
           {/* Share Link */}
           <button
             onClick={handleShare}
-            className="flex items-center gap-1.5 group/btn hover:text-white transition-colors"
+            className="flex items-center gap-1.5 group/btn text-white/50 hover:text-white transition-all active:scale-95 p-1.5 rounded-full hover:bg-white/10"
             title="Copy post link"
           >
-            <div className="p-2 rounded-full group-hover/btn:bg-white/10 transition-colors -ml-2">
-              {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Share className="w-4 h-4" />}
-            </div>
+            {copied ? (
+              <Check className="w-[18px] h-[18px] text-emerald-400 stroke-[2] animate-scale-in" />
+            ) : (
+              <Share className="w-[18px] h-[18px] stroke-[1.8] transition-transform duration-200 group-hover/btn:-translate-y-0.5" />
+            )}
           </button>
         </div>
       </div>

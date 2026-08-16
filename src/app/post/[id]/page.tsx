@@ -1,24 +1,31 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { AppShell } from '@/components/layout/AppShell';
 import { useApp } from '@/context/AppContext';
 import { Post, Reply } from '@/types';
-import { formatNumber } from '@/lib/utils';
+import { formatNumber, formatTimeAgo } from '@/lib/utils';
 import { 
   ArrowLeft, 
-  MessageSquare, 
+  MessageCircle, 
   Repeat2, 
   Heart, 
   Bookmark, 
   Share, 
   Check, 
   Sparkles,
-  Image as ImageIcon
+  X,
+  CornerDownRight
 } from 'lucide-react';
+
+interface ReplyingTarget {
+  id: string;
+  authorName: string;
+  username: string;
+}
 
 export default function PostDetailPage() {
   const params = useParams();
@@ -31,6 +38,8 @@ export default function PostDetailPage() {
   const [replyText, setReplyText] = useState('');
   const [loadingReply, setLoadingReply] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<ReplyingTarget | null>(null);
+  const replyInputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     const found = posts.find(p => p.id === postId);
@@ -42,7 +51,7 @@ export default function PostDetailPage() {
       setReplies(reps);
     }
     loadReplies();
-  }, [postId, posts]);
+  }, [postId, posts, getRepliesForPost]);
 
   if (!post) {
     return (
@@ -60,16 +69,30 @@ export default function PostDetailPage() {
 
     setLoadingReply(true);
     try {
-      const newReply = await addReply(postId, replyText.trim());
+      const parentId = replyingTo?.id || null;
+      const newReply = await addReply(postId, replyText.trim(), parentId);
       if (newReply) {
         setReplies(prev => [...prev, newReply]);
       }
       setReplyText('');
+      setReplyingTo(null);
     } catch (err) {
       console.error(err);
     } finally {
       setLoadingReply(false);
     }
+  };
+
+  const handleStartReplyTo = (rep: Reply) => {
+    setReplyingTo({
+      id: rep.id,
+      authorName: rep.author?.full_name || 'User',
+      username: rep.author?.username || 'user',
+    });
+    setTimeout(() => {
+      replyInputRef.current?.focus();
+      replyInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
   };
 
   const handleShare = () => {
@@ -80,17 +103,90 @@ export default function PostDetailPage() {
     }
   };
 
+  // Build threaded tree structure
+  const rootReplies = replies.filter(r => !r.parent_reply_id);
+  const getChildReplies = (parentId: string) => replies.filter(r => r.parent_reply_id === parentId);
+
+  const renderReplyItem = (rep: Reply, isChild = false) => {
+    const children = getChildReplies(rep.id);
+    const isTarget = replyingTo?.id === rep.id;
+
+    return (
+      <div key={rep.id} className={`relative ${isChild ? 'ml-6 pl-4 border-l border-white/10 mt-3' : 'p-4'}`}>
+        <div className="flex gap-3.5 hover:bg-white/[0.02] p-2 rounded-xl transition-colors">
+          {/* Avatar */}
+          <Link href={`/profile/${rep.author?.username || 'user'}`} className="flex-shrink-0">
+            <Image
+              src={rep.author?.avatar_url || '/default-avatar.jpg'}
+              alt={rep.author?.full_name || 'user'}
+              width={36}
+              height={36}
+              className="w-9 h-9 rounded-full object-cover border border-white/10"
+            />
+          </Link>
+
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <Link 
+                href={`/profile/${rep.author?.username || 'user'}`}
+                className="font-bold text-white text-sm hover:underline"
+              >
+                {rep.author?.full_name}
+              </Link>
+              <span className="text-on-surface-variant text-xs font-mono">@{rep.author?.username}</span>
+              <span className="text-on-surface-variant text-[11px] font-mono">· {formatTimeAgo(rep.created_at)}</span>
+            </div>
+
+            <p className="text-white text-sm leading-relaxed font-body mb-2.5 whitespace-pre-wrap">
+              {rep.content}
+            </p>
+
+            {/* Actions on Reply */}
+            <div className="flex items-center gap-6 text-on-surface-variant text-xs font-mono">
+              <button 
+                onClick={() => handleStartReplyTo(rep)}
+                className={`flex items-center gap-1.5 transition-all group/repbtn ${
+                  isTarget ? 'text-primary font-semibold' : 'hover:text-sky-400'
+                }`}
+              >
+                <div className="p-1.5 rounded-full group-hover/repbtn:bg-sky-400/10 group-hover/repbtn:scale-110 active:scale-90 transition-all">
+                  <MessageCircle className="w-3.5 h-3.5 stroke-[1.8]" />
+                </div>
+                <span>Reply</span>
+              </button>
+
+              <button className="flex items-center gap-1.5 hover:text-rose-500 transition-all group/likebtn">
+                <div className="p-1.5 rounded-full group-hover/likebtn:bg-rose-500/10 group-hover/likebtn:scale-110 active:scale-90 transition-all">
+                  <Heart className="w-3.5 h-3.5" />
+                </div>
+                <span>{rep.likes_count || 0}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Render nested children recursively */}
+        {children.length > 0 && (
+          <div className="space-y-1">
+            {children.map(child => renderReplyItem(child, true))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <AppShell>
       {/* Sticky Header with Back Button */}
       <div className="sticky top-0 z-30 w-full bg-black/80 backdrop-blur-xl border-b border-white/10 flex items-center gap-6 h-14 px-4">
         <button
           onClick={() => router.back()}
-          className="p-2 -ml-2 rounded-full hover:bg-white/10 text-white transition-colors"
+          className="p-2 -ml-2 rounded-full hover:bg-white/10 text-white transition-all active:scale-90"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <h1 className="font-headline text-lg font-bold text-primary tracking-tight">Post</h1>
+        <h1 className="font-headline text-lg font-bold text-primary tracking-tight">Chronicle</h1>
       </div>
 
       {/* Main Post Content */}
@@ -103,7 +199,7 @@ export default function PostDetailPage() {
               alt={post.author?.full_name || 'user'}
               width={48}
               height={48}
-              className="w-12 h-12 rounded-full object-cover border border-white/10 transition-all"
+              className="w-12 h-12 rounded-full object-cover border border-white/10 transition-all hover:scale-105"
             />
           </Link>
           <div>
@@ -132,7 +228,7 @@ export default function PostDetailPage() {
               alt="Post media"
               width={800}
               height={600}
-              className="w-full h-auto max-h-[600px] object-cover hover:scale-[1.02] transition-transform duration-500"
+              className="w-full h-auto max-h-[600px] object-contain hover:scale-[1.01] transition-transform duration-500"
               loading="lazy"
             />
           </div>
@@ -164,87 +260,133 @@ export default function PostDetailPage() {
           </div>
         </div>
 
-        {/* Interactive Action Icons */}
+        {/* Interactive Action Icons with Rich Animations */}
         <div className="flex justify-around items-center py-2.5 text-on-surface-variant">
+          {/* Reply */}
           <button
-            onClick={() => document.getElementById('reply-input')?.focus()}
-            className="p-2 rounded-full hover:bg-white/10 hover:text-white transition-colors"
+            onClick={() => {
+              setReplyingTo(null);
+              replyInputRef.current?.focus();
+            }}
+            className="p-2.5 rounded-full text-white/50 hover:text-sky-400 hover:bg-sky-400/10 transition-all group active:scale-90"
+            title="Reply"
           >
-            <MessageSquare className="w-5 h-5" />
+            <MessageCircle className="w-5 h-5 stroke-[1.8] transition-transform group-hover:-rotate-6" />
           </button>
+
+          {/* Repost */}
           <button
             onClick={() => toggleRepost(post.id)}
-            className={`p-2 rounded-full hover:bg-emerald-400/10 transition-colors ${
+            className={`p-2.5 rounded-full hover:bg-emerald-400/10 transition-all group active:scale-90 ${
               post.is_reposted ? 'text-emerald-400' : 'hover:text-emerald-400'
             }`}
+            title="Repost"
           >
-            <Repeat2 className="w-5 h-5" />
+            <Repeat2 className={`w-5 h-5 transition-all duration-300 group-hover:rotate-45 active:rotate-180 ${
+              post.is_reposted ? 'drop-shadow-[0_0_8px_rgba(52,211,153,0.7)]' : ''
+            }`} />
           </button>
+
+          {/* Like */}
           <button
             onClick={() => toggleLike(post.id)}
-            className={`p-2 rounded-full hover:bg-rose-500/10 transition-colors ${
+            className={`p-2.5 rounded-full hover:bg-rose-500/10 transition-all group active:scale-75 ${
               post.is_liked ? 'text-rose-500' : 'hover:text-rose-500'
             }`}
+            title="Like"
           >
-            <Heart className={`w-5 h-5 ${post.is_liked ? 'fill-rose-500 stroke-rose-500' : ''}`} />
+            <Heart className={`w-5 h-5 transition-all duration-200 ${
+              post.is_liked 
+                ? 'fill-rose-500 stroke-rose-500 drop-shadow-[0_0_10px_rgba(244,63,94,0.8)] scale-115' 
+                : 'group-hover:scale-110'
+            }`} />
           </button>
+
+          {/* Bookmark */}
           <button
             onClick={() => toggleBookmark(post.id)}
-            className={`p-2 rounded-full hover:bg-cyan-400/10 transition-colors ${
+            className={`p-2.5 rounded-full hover:bg-cyan-400/10 transition-all group active:scale-90 ${
               post.is_bookmarked ? 'text-cyan-400' : 'hover:text-cyan-400'
             }`}
+            title="Bookmark"
           >
-            <Bookmark className={`w-5 h-5 ${post.is_bookmarked ? 'fill-cyan-400 stroke-cyan-400' : ''}`} />
+            <Bookmark className={`w-5 h-5 transition-all duration-200 ${
+              post.is_bookmarked 
+                ? 'fill-cyan-400 stroke-cyan-400 drop-shadow-[0_0_10px_rgba(34,211,238,0.8)] scale-110' 
+                : 'group-hover:scale-110'
+            }`} />
           </button>
+
+          {/* Share */}
           <button
             onClick={handleShare}
-            className="p-2 rounded-full hover:bg-white/10 hover:text-white transition-colors"
+            className="p-2.5 rounded-full hover:bg-white/10 hover:text-white transition-all group active:scale-90"
             title="Copy link"
           >
-            {copied ? <Check className="w-5 h-5 text-emerald-400" /> : <Share className="w-5 h-5" />}
+            {copied ? (
+              <Check className="w-5 h-5 text-emerald-400 animate-scale-in" />
+            ) : (
+              <Share className="w-5 h-5 transition-transform group-hover:-translate-y-0.5" />
+            )}
           </button>
         </div>
       </article>
 
-      {/* Reply Input Box */}
+      {/* Reply Input Box with Target Indicator */}
       {user ? (
-        <form onSubmit={handleReplySubmit} className="p-4 border-b border-white/10 flex gap-3.5 bg-black/40">
-          <Image
-            src={user.avatar_url || '/default-avatar.jpg'}
-            alt={user.full_name}
-            width={40}
-            height={40}
-            className="w-10 h-10 rounded-full object-cover border border-white/10 flex-shrink-0"
-          />
-          <div className="flex-1">
-            <textarea
-              id="reply-input"
-              value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
-              placeholder="Post your reply..."
-              rows={2}
-              className="w-full bg-transparent border-none text-white text-base placeholder:text-outline focus:ring-0 resize-none outline-none font-body leading-relaxed"
-            />
-            <div className="flex justify-between items-center pt-2 border-t border-white/[0.06]">
-              <div className="flex items-center gap-1 text-on-surface-variant">
-                <button type="button" className="p-1.5 rounded-full hover:bg-white/10 hover:text-white">
-                  <ImageIcon className="w-4 h-4" />
-                </button>
-                <button 
-                  type="button" 
-                  onClick={() => setReplyText(prev => prev + ' 🖤')} 
-                  className="p-1.5 rounded-full hover:bg-white/10 hover:text-white"
-                >
-                  <Sparkles className="w-4 h-4" />
-                </button>
+        <form onSubmit={handleReplySubmit} className="p-4 border-b border-white/10 flex flex-col gap-2 bg-black/40">
+          {replyingTo && (
+            <div className="flex items-center justify-between px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs font-mono text-on-surface-variant animate-fade-in">
+              <div className="flex items-center gap-1.5">
+                <CornerDownRight className="w-3.5 h-3.5 text-primary" />
+                <span>Replying to <strong className="text-white font-semibold">@{replyingTo.username}</strong></span>
               </div>
               <button
-                type="submit"
-                disabled={!replyText.trim() || loadingReply}
-                className="bg-primary text-black font-headline font-bold py-1 px-4 rounded-full text-xs hover:bg-white/90 transition-all disabled:opacity-40"
+                type="button"
+                onClick={() => setReplyingTo(null)}
+                className="p-1 hover:bg-white/10 rounded-full text-white/70 hover:text-white transition-colors"
+                title="Cancel reply targeting"
               >
-                {loadingReply ? 'Replying...' : 'Reply'}
+                <X className="w-3.5 h-3.5" />
               </button>
+            </div>
+          )}
+
+          <div className="flex gap-3.5">
+            <Image
+              src={user.avatar_url || '/default-avatar.jpg'}
+              alt={user.full_name}
+              width={40}
+              height={40}
+              className="w-10 h-10 rounded-full object-cover border border-white/10 flex-shrink-0"
+            />
+            <div className="flex-1">
+              <textarea
+                ref={replyInputRef}
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                placeholder={replyingTo ? `Reply to @${replyingTo.username}...` : "Post your reply..."}
+                rows={2}
+                className="w-full bg-transparent border-none text-white text-base placeholder:text-outline focus:ring-0 resize-none outline-none font-body leading-relaxed"
+              />
+              <div className="flex justify-between items-center pt-2 border-t border-white/[0.06]">
+                <div className="flex items-center gap-1 text-on-surface-variant">
+                  <button 
+                    type="button" 
+                    onClick={() => setReplyText(prev => prev + ' 🖤')} 
+                    className="p-1.5 rounded-full hover:bg-white/10 hover:text-white transition-colors"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                  </button>
+                </div>
+                <button
+                  type="submit"
+                  disabled={!replyText.trim() || loadingReply}
+                  className="bg-primary text-black font-headline font-bold py-1.5 px-5 rounded-full text-xs hover:bg-white/90 active:scale-95 transition-all disabled:opacity-40 disabled:pointer-events-none shadow-[0_0_15px_rgba(255,255,255,0.15)]"
+                >
+                  {loadingReply ? 'Replying...' : 'Reply'}
+                </button>
+              </div>
             </div>
           </div>
         </form>
@@ -261,41 +403,7 @@ export default function PostDetailPage() {
             No replies yet. Be the first to share your thoughts.
           </div>
         ) : (
-          replies.map((rep) => (
-            <div key={rep.id} className="p-4 flex gap-3.5 hover:bg-white/[0.02] transition-colors">
-              {/* Avatar + Thread line */}
-              <div className="flex flex-col items-center flex-shrink-0">
-                <Image
-                  src={rep.author?.avatar_url || '/default-avatar.jpg'}
-                  alt={rep.author?.full_name}
-                  width={40}
-                  height={40}
-                  className="w-10 h-10 rounded-full object-cover border border-white/10"
-                />
-              </div>
-
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-bold text-white text-sm">{rep.author?.full_name}</span>
-                  <span className="text-on-surface-variant text-xs font-mono">@{rep.author?.username}</span>
-                </div>
-                <p className="text-white text-sm leading-relaxed font-body mb-2.5">
-                  {rep.content}
-                </p>
-                <div className="flex items-center gap-6 text-on-surface-variant text-xs font-mono">
-                  <button className="flex items-center gap-1 hover:text-white transition-colors">
-                    <MessageSquare className="w-3.5 h-3.5" />
-                    <span>Reply</span>
-                  </button>
-                  <button className="flex items-center gap-1 hover:text-rose-500 transition-colors">
-                    <Heart className="w-3.5 h-3.5" />
-                    <span>{rep.likes_count || 0}</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))
+          rootReplies.map((rep) => renderReplyItem(rep, false))
         )}
       </div>
     </AppShell>

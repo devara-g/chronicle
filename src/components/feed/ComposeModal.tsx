@@ -15,10 +15,27 @@ export function ComposeModal() {
 
   if (!isComposeOpen || !user) return null;
 
+  const deleteOrphanedMedia = async (url: string) => {
+    if (!url) return;
+    try {
+      const { StorageService } = await import('@/lib/services/storage.service');
+      await StorageService.deleteMedia(url);
+    } catch (err) {
+      console.warn('Could not delete orphaned media:', err);
+    }
+  };
+
+  const handleRemoveMedia = async () => {
+    const url = mediaUrl;
+    setMediaUrl('');
+    await deleteOrphanedMedia(url);
+  };
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     
+    const previousUrl = mediaUrl;
     setUploadingMedia(true);
     try {
       const { compressImageToWebp } = await import('@/lib/image-utils');
@@ -27,6 +44,7 @@ export function ComposeModal() {
       const compressedFile = await compressImageToWebp(file, 1200);
       const url = await StorageService.uploadMedia(compressedFile, user.id);
       
+      if (previousUrl) await deleteOrphanedMedia(previousUrl);
       setMediaUrl(url);
     } catch (err) {
       console.error('Failed to upload image', err);
@@ -61,7 +79,10 @@ export function ComposeModal() {
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
           <button
-            onClick={closeCompose}
+            onClick={() => {
+              if (mediaUrl) handleRemoveMedia();
+              closeCompose();
+            }}
             className="p-1.5 rounded-full hover:bg-white/10 text-on-surface-variant hover:text-white transition-colors"
           >
             <X className="w-5 h-5" />
@@ -71,7 +92,7 @@ export function ComposeModal() {
         </div>
 
         {/* Form Body */}
-        <div className="p-4 flex gap-3.5">
+        <div className="p-4 flex gap-3.5 max-h-[70vh] overflow-y-auto">
           <Image
             src={user.avatar_url || '/default-avatar.jpg'}
             alt={user.full_name}
@@ -80,7 +101,7 @@ export function ComposeModal() {
             className="w-11 h-11 rounded-full object-cover border border-white/10 flex-shrink-0 mt-1"
           />
 
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
@@ -97,13 +118,14 @@ export function ComposeModal() {
                  <span className="ml-3 text-xs text-on-surface-variant font-mono">Compressing & Uploading...</span>
               </div>
             ) : mediaUrl ? (
-              <div className="mt-2 relative rounded-lg overflow-hidden border border-white/10 max-h-40 group">
-                <Image src={mediaUrl} alt="Preview" width={400} height={300} className="w-full h-auto object-cover" />
+              <div className="mt-2 relative rounded-xl overflow-hidden border border-white/10 bg-black/40 group">
+                <Image src={mediaUrl} alt="Preview" width={600} height={400} className="w-full h-auto object-contain" />
                 <button
-                  onClick={() => setMediaUrl('')}
-                  className="absolute top-2 right-2 p-1 bg-black/70 text-white rounded-full hover:bg-black opacity-0 group-hover:opacity-100 transition-opacity"
+                  type="button"
+                  onClick={handleRemoveMedia}
+                  className="absolute top-2 right-2 p-1.5 bg-black/80 hover:bg-black text-white rounded-full transition-colors shadow-lg"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
             ) : null}
