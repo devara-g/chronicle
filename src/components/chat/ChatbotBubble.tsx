@@ -22,7 +22,7 @@ export function ChatbotBubble() {
   // Hide floating button on /messages to avoid cluttering chat window
   const isMessagesPage = pathname.startsWith('/messages');
 
-  // Allow opening AI assistant via custom event from anywhere
+  // Allow opening AI assistant via custom event from anywhere (navbar, sidebar, header)
   useEffect(() => {
     const handleOpen = () => setIsOpen(true);
     window.addEventListener('open-ai-assistant', handleOpen);
@@ -36,12 +36,12 @@ export function ChatbotBubble() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
-    sendMessage({ text: input });
+    const textToSend = input.trim();
     setInput('');
+    sendMessage({ text: textToSend });
   };
 
-  const getMessageText = (m: any): string => {
-    if (typeof m.content === 'string' && m.content) return m.content;
+  const getMessageText = (m: UIMessage): string => {
     if (Array.isArray(m.parts)) {
       const text = m.parts
         .filter((p: any) => p.type === 'text')
@@ -49,7 +49,8 @@ export function ChatbotBubble() {
         .join('');
       if (text) return text;
     }
-    if (typeof m.text === 'string' && m.text) return m.text;
+    if (typeof (m as any).content === 'string') return (m as any).content;
+    if (typeof (m as any).text === 'string') return (m as any).text;
     return '';
   };
 
@@ -169,7 +170,7 @@ export function ChatbotBubble() {
               <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="font-semibold">Gagal memproses pesan.</p>
-                <p className="opacity-80 mt-0.5">Pastikan <code>GROQ_API_KEY</code> sudah dimasukkan di Vercel Environment Variables.</p>
+                <p className="opacity-80 mt-0.5">{error.message || 'Cek koneksi internet atau API Key.'}</p>
               </div>
             </div>
           )}

@@ -1,7 +1,6 @@
 import { createGroq } from '@ai-sdk/groq';
-import { convertToModelMessages, streamText, type UIMessage } from 'ai';
+import { streamText } from 'ai';
 
-// Allow streaming responses up to 30 seconds
 export const maxDuration = 30;
 
 export async function POST(req: Request) {
@@ -14,8 +13,23 @@ export async function POST(req: Request) {
       );
     }
 
+    const { messages } = await req.json();
     const groq = createGroq({ apiKey });
-    const { messages }: { messages: UIMessage[] } = await req.json();
+
+    // Format messages cleanly for LLM consumption
+    const modelMessages = (messages || []).map((m: any) => {
+      let content = m.content;
+      if (!content && Array.isArray(m.parts)) {
+        content = m.parts
+          .filter((p: any) => p.type === 'text')
+          .map((p: any) => p.text)
+          .join('');
+      }
+      return {
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: content || '',
+      };
+    });
 
     const result = streamText({
       model: groq('llama-3.3-70b-versatile'),
@@ -35,7 +49,7 @@ Tugasmu:
 - Ngobrol santai seputar topik yang user minta
 
 Ingat: Chronicle itu platform microblog tercepat dan terindah. Kamu bagian dari vibe-nya.`,
-      prompt: await convertToModelMessages(messages),
+      messages: modelMessages,
     });
 
     return result.toUIMessageStreamResponse();
