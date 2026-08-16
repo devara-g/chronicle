@@ -302,7 +302,7 @@ function MessagesContent() {
                         alt={conv.participant.full_name}
                         width={48}
                         height={48}
-                        className="w-12 h-12 rounded-full object-cover border border-white/10"
+                        className="w-12 h-12 rounded-full object-cover border border-white/10 aspect-square shrink-0"
                       />
                       {conv.unread_count > 0 && (
                         <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-sky-400 rounded-full border-2 border-black animate-pulse"></span>
@@ -356,7 +356,7 @@ function MessagesContent() {
                       alt={activeConversation.participant.full_name}
                       width={40}
                       height={40}
-                      className="w-10 h-10 rounded-full object-cover border border-white/10 group-hover:scale-105 transition-transform"
+                      className="w-10 h-10 rounded-full object-cover border border-white/10 aspect-square shrink-0 group-hover:scale-105 transition-transform"
                     />
                     <div>
                       <h2 className="font-bold text-[15px] text-white leading-tight group-hover:underline">
@@ -383,14 +383,15 @@ function MessagesContent() {
               {/* Message Stream */}
               <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 space-y-4">
                 {/* Participant Bio Card in Thread */}
-                <div className="text-center py-8 space-y-2 border-b border-white/5 mb-4">
-                  <Image
-                    src={activeConversation.participant.avatar_url || '/default-avatar.jpg'}
-                    alt="Participant"
-                    width={72}
-                    height={72}
-                    className="w-18 h-18 rounded-full mx-auto object-cover border-2 border-white/20 shadow-xl"
-                  />
+                <div className="text-center py-6 md:py-8 space-y-2 border-b border-white/5 mb-4">
+                  <div className="relative w-20 h-20 mx-auto rounded-full overflow-hidden border-2 border-white/20 shadow-xl aspect-square shrink-0 bg-white/5">
+                    <Image
+                      src={activeConversation.participant.avatar_url || '/default-avatar.jpg'}
+                      alt="Participant"
+                      fill
+                      className="object-cover"
+                    />
+                  </div>
                   <h3 className="font-headline font-bold text-white text-lg">{activeConversation.participant.full_name}</h3>
                   <p className="text-xs text-on-surface-variant font-mono">@{activeConversation.participant.username}</p>
                   {activeConversation.participant.bio && (
