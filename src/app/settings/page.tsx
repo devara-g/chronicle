@@ -261,7 +261,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-6 pb-20">
+      <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-6 pb-28 md:pb-20">
         {/* Real-time Status Toast Alert */}
         {statusMessage && (
           <div
