@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
-import { Eye, EyeOff, Sparkles, ArrowRight } from 'lucide-react';
+import { Eye, EyeOff, Sparkles, ArrowRight, Infinity } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -49,7 +49,7 @@ export default function LoginPage() {
         {/* Brand Header */}
         <div className="text-center mb-8 space-y-2">
           <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center mx-auto mb-3">
-            <span className="material-symbols-outlined text-white text-3xl">all_inclusive</span>
+            <Infinity className="w-7 h-7 text-white" />
           </div>
           <h1 className="font-headline font-bold text-2xl md:text-3xl text-white tracking-tight">Chronicle</h1>
           <p className="text-xs text-on-surface-variant font-mono">Sign in to your noir space</p>

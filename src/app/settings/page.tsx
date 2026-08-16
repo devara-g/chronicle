@@ -82,8 +82,8 @@ export default function SettingsPage() {
               <div className="flex items-center gap-3.5">
                 <User className="w-5 h-5 text-on-surface-variant group-hover:text-white transition-colors" />
                 <div>
-                  <p className="font-semibold text-sm text-white">{user.full_name}</p>
-                  <p className="text-xs text-on-surface-variant font-mono">@{user.username}</p>
+                  <p className="font-semibold text-sm text-white">{user?.full_name || 'User'}</p>
+                  <p className="text-xs text-on-surface-variant font-mono">@{user?.username || 'traveler'}</p>
                 </div>
               </div>
               <ChevronRight className="w-4 h-4 text-on-surface-variant group-hover:text-white transition-colors" />

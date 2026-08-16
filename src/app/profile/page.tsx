@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
 import { useApp } from '@/context/AppContext';
 import { PostCard } from '@/components/feed/PostCard';
@@ -8,11 +8,28 @@ import { EditProfileModal } from '@/components/modals/EditProfileModal';
 import Image from 'next/image';
 import { formatNumber } from '@/lib/utils';
 import { Calendar, Link as LinkIcon, Sparkles } from 'lucide-react';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 
 export default function ProfilePage() {
-  const { user, posts } = useApp();
+  const { user, posts, followingIds } = useApp();
   const [activeTab, setActiveTab] = useState<'posts' | 'replies' | 'media' | 'likes'>('posts');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [followCounts, setFollowCounts] = useState({ following: 0, followers: 0 });
+
+  useEffect(() => {
+    if (!user || !isSupabaseConfigured()) return;
+    async function fetchCounts() {
+      const [followingRes, followersRes] = await Promise.all([
+        supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', user!.id),
+        supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', user!.id),
+      ]);
+      setFollowCounts({
+        following: followingRes.count ?? 0,
+        followers: followersRes.count ?? 0,
+      });
+    }
+    fetchCounts();
+  }, [user, followingIds]); // re-run when followingIds changes (after follow/unfollow)
 
   if (!user) {
     return (
@@ -111,11 +128,11 @@ export default function ProfilePage() {
           {/* Following / Followers Stats */}
           <div className="flex items-center gap-5 pt-1 text-sm font-body">
             <div className="flex items-center gap-1">
-              <strong className="text-white font-semibold font-mono">{formatNumber(user.following_count || 0)}</strong>
+              <strong className="text-white font-semibold font-mono">{formatNumber(followCounts.following)}</strong>
               <span className="text-on-surface-variant text-xs">Following</span>
             </div>
             <div className="flex items-center gap-1">
-              <strong className="text-white font-semibold font-mono">{formatNumber(user.followers_count || 0)}</strong>
+              <strong className="text-white font-semibold font-mono">{formatNumber(followCounts.followers)}</strong>
               <span className="text-on-surface-variant text-xs">Followers</span>
             </div>
           </div>

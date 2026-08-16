@@ -14,12 +14,13 @@ import {
   Settings, 
   Feather,
   Sparkles,
-  MoreHorizontal
+  MoreHorizontal,
+  Infinity
 } from 'lucide-react';
 
 export function SidebarNav() {
   const pathname = usePathname();
-  const { user, unreadNotifsCount, unreadMessagesCount, openCompose } = useApp();
+  const { user, unreadNotifsCount, unreadMessagesCount, openCompose, markNotificationsRead } = useApp();
 
   const navItems = [
     { label: 'Home', href: '/', icon: Home, badge: 0 },
@@ -39,11 +40,11 @@ export function SidebarNav() {
           className="flex items-center gap-3 text-white font-headline text-2xl font-bold tracking-tight hover:opacity-85 transition-opacity group"
         >
           <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center group-hover:scale-105 transition-transform">
-            <span className="material-symbols-outlined text-white text-2xl">all_inclusive</span>
+            <Infinity className="w-5 h-5 text-white" />
           </div>
           <div>
             <span className="text-xl font-bold tracking-tight">Chronicle</span>
-            <p className="text-[11px] font-mono tracking-wider text-on-surface-variant uppercase opacity-75">Noir Glass</p>
+            <p className="text-[11px] font-mono tracking-wider text-on-surface-variant uppercase opacity-75">News Feed</p>
           </div>
         </Link>
       </div>
@@ -57,6 +58,11 @@ export function SidebarNav() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={() => {
+                if (item.href === '/notifications' && unreadNotifsCount > 0) {
+                  markNotificationsRead();
+                }
+              }}
               className={`flex items-center justify-between px-4 py-3 rounded-full transition-all duration-150 group ${
                 isActive 
                   ? 'bg-white/10 text-white font-semibold shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)]' 

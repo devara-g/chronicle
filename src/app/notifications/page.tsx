@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { AppShell } from '@/components/layout/AppShell';
@@ -17,8 +17,16 @@ import {
 } from 'lucide-react';
 
 export default function NotificationsPage() {
-  const { notifications, markNotificationsRead } = useApp();
+  const { notifications, markNotificationsRead, markSingleNotificationRead } = useApp();
   const [filter, setFilter] = useState<'all' | 'mentions' | 'likes' | 'reposts'>('all');
+
+  // Auto-mark all unread notifications as read when viewing this page
+  useEffect(() => {
+    const hasUnread = notifications.some(n => !n.read);
+    if (hasUnread) {
+      markNotificationsRead();
+    }
+  }, [notifications, markNotificationsRead]);
 
   const filteredNotifs = notifications.filter((n) => {
     if (filter === 'mentions') return n.type === 'mention';
@@ -80,6 +88,11 @@ export default function NotificationsPage() {
               <Link
                 key={notif.id}
                 href={href}
+                onClick={() => {
+                  if (!notif.read) {
+                    markSingleNotificationRead(notif.id);
+                  }
+                }}
                 className={`p-4 flex gap-3.5 hover:bg-white/[0.02] transition-colors cursor-pointer ${
                   !notif.read ? 'bg-white/[0.03]' : ''
                 }`}

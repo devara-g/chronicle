@@ -19,6 +19,7 @@ export default function UserProfilePage() {
   const [activeTab, setActiveTab] = useState<'posts' | 'replies' | 'media' | 'likes'>('posts');
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [followCounts, setFollowCounts] = useState({ following: 0, followers: 0 });
 
   useEffect(() => {
     async function fetchProfile() {
@@ -31,6 +32,15 @@ export default function UserProfilePage() {
           
         if (!error && data) {
           setProfile(data);
+          // Fetch follow counts from follows table
+          const [followingRes, followersRes] = await Promise.all([
+            supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', data.id),
+            supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', data.id),
+          ]);
+          setFollowCounts({
+            following: followingRes.count ?? 0,
+            followers: followersRes.count ?? 0,
+          });
         }
       } catch (err) {
         console.error(err);
@@ -151,11 +161,11 @@ export default function UserProfilePage() {
 
           <div className="flex items-center gap-5 pt-1 text-sm font-body">
             <div className="flex items-center gap-1">
-              <strong className="text-white font-semibold font-mono">{formatNumber(profile.following_count || 0)}</strong>
+              <strong className="text-white font-semibold font-mono">{formatNumber(followCounts.following)}</strong>
               <span className="text-on-surface-variant text-xs">Following</span>
             </div>
             <div className="flex items-center gap-1">
-              <strong className="text-white font-semibold font-mono">{formatNumber(profile.followers_count || 0)}</strong>
+              <strong className="text-white font-semibold font-mono">{formatNumber(followCounts.followers)}</strong>
               <span className="text-on-surface-variant text-xs">Followers</span>
             </div>
           </div>

@@ -4,6 +4,8 @@ import React from 'react';
 import { SidebarNav } from './SidebarNav';
 import { RightSidebar } from './RightSidebar';
 import { MobileNav } from './MobileNav';
+import { ComposeModal } from '@/components/feed/ComposeModal';
+import { ChatbotBubble } from '@/components/chat/ChatbotBubble';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -26,6 +28,10 @@ export function AppShell({ children, hideRightSidebar = false }: AppShellProps) 
 
       {/* Mobile Bottom Navigation */}
       <MobileNav />
+
+      {/* Modals and Global Overlays */}
+      <ComposeModal />
+      <ChatbotBubble />
     </div>
   );
 }

@@ -19,18 +19,36 @@ export function ComposePost({ placeholder = "What's happening in the noir?", onS
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const deleteOrphanedMedia = async (url: string) => {
+    if (!url) return;
+    try {
+      const { StorageService } = await import('@/lib/services/storage.service');
+      await StorageService.deleteMedia(url);
+    } catch (err) {
+      console.warn('Could not delete orphaned media:', err);
+    }
+  };
+
+  const handleRemoveMedia = async () => {
+    const url = mediaUrl;
+    setMediaUrl('');
+    await deleteOrphanedMedia(url);
+  };
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
-    
+
+    const previousUrl = mediaUrl;
     setUploadingMedia(true);
     try {
       const { compressImageToWebp } = await import('@/lib/image-utils');
       const { StorageService } = await import('@/lib/services/storage.service');
-      
+
       const compressedFile = await compressImageToWebp(file, 1200);
       const url = await StorageService.uploadMedia(compressedFile, user.id);
-      
+
+      if (previousUrl) await deleteOrphanedMedia(previousUrl);
       setMediaUrl(url);
     } catch (err) {
       console.error('Failed to upload image', err);
@@ -103,11 +121,11 @@ export function ComposePost({ placeholder = "What's happening in the noir?", onS
              <span className="ml-3 text-xs text-on-surface-variant font-mono">Compressing & Uploading...</span>
           </div>
         ) : mediaUrl ? (
-          <div className="mb-3 relative rounded-lg overflow-hidden border border-white/10 max-h-40 group">
-            <Image src={mediaUrl} alt="Preview" width={400} height={300} className="w-full h-auto object-cover" />
+          <div className="mb-3 relative rounded-xl overflow-hidden border border-white/10 group">
+            <Image src={mediaUrl} alt="Preview" width={600} height={400} className="w-full h-auto object-contain" />
             <button
-              onClick={() => setMediaUrl('')}
-              className="absolute top-2 right-2 p-1 bg-black/70 hover:bg-black text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={handleRemoveMedia}
+              className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black text-white rounded-full transition-colors"
             >
               <X className="w-4 h-4" />
             </button>

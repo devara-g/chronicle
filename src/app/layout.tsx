@@ -23,7 +23,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Chronicle — Noir Glass Microblog",
+  title: "Chronicle —  Feed Like sticth",
   description: "A minimalist, dark glassmorphic micro-blogging platform. Focus on high-contrast typography, structural transparency, and digital stillness.",
 };
 

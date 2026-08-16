@@ -29,11 +29,12 @@ interface AppContextType {
   toggleLike: (postId: string) => void;
   toggleRepost: (postId: string) => void;
   toggleBookmark: (postId: string) => void;
-  toggleFollow: (userId: string) => void;
+  toggleFollow: (userId: string) => Promise<void>;
   addReply: (postId: string, content: string, parentReplyId?: string | null) => Promise<Reply | null>;
   getRepliesForPost: (postId: string) => Promise<Reply[]>;
   sendMessage: (conversationId: string, content: string) => Message | null;
-  markNotificationsRead: () => void;
+  markNotificationsRead: () => Promise<void>;
+  markSingleNotificationRead: (id: string) => Promise<void>;
   updateUserProfile: (data: Partial<Profile>) => Promise<void>;
 }
 
@@ -60,8 +61,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ]);
         setPosts(loadedPosts);
         setUser(loadedProfile);
-        setNotifications(NotificationsService.getNotifications());
         setConversations(MessagesService.getConversations());
+
+        // Load follows and notifications after we know who the user is
+        if (loadedProfile && isSupabaseConfigured()) {
+          const [followsData, notifData] = await Promise.all([
+            supabase
+              .from('follows')
+              .select('following_id')
+              .eq('follower_id', loadedProfile.id),
+            NotificationsService.getNotifications(loadedProfile.id),
+          ]);
+          if (followsData.data) {
+            setFollowingIds(followsData.data.map((f: any) => f.following_id));
+          }
+          setNotifications(notifData);
+        }
       } catch (err) {
         console.error('Failed loading app data:', err);
       } finally {
@@ -71,7 +86,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     loadData();
   }, []);
 
-  // Supabase Realtime WebSocket Subscription
+  // Supabase Realtime WebSocket Subscription for Posts & Notifications
   useEffect(() => {
     if (!isSupabaseConfigured()) return;
 
@@ -97,6 +112,55 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       supabase.removeChannel(postsChannel);
     };
   }, []);
+
+  // Realtime subscription for user's notifications
+  useEffect(() => {
+    if (!isSupabaseConfigured() || !user) return;
+
+    const notifsChannel = supabase
+      .channel(`public:notifications:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        async (payload) => {
+          if (payload.new && payload.new.id) {
+            const fullNotif = await NotificationsService.getNotificationById(payload.new.id);
+            if (fullNotif) {
+              setNotifications(prev => {
+                if (prev.some(n => n.id === fullNotif.id)) return prev;
+                return [fullNotif, ...prev];
+              });
+            }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          if (payload.new && payload.new.id) {
+            setNotifications(prev =>
+              prev.map(n => (n.id === payload.new.id ? { ...n, read: payload.new.read } : n))
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(notifsChannel);
+    };
+  }, [user]);
 
   const openCompose = useCallback(() => setIsComposeOpen(true), []);
   const closeCompose = useCallback(() => setIsComposeOpen(false), []);
@@ -202,18 +266,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, [user]);
 
-  const toggleFollow = useCallback((userId: string) => {
+  const toggleFollow = useCallback(async (userId: string) => {
     if (!user) return;
-    setFollowingIds(prev => {
-      const exists = prev.includes(userId);
-      const updated = exists ? prev.filter(id => id !== userId) : [...prev, userId];
-      setUser(u => u ? ({
-        ...u,
-        following_count: Math.max(0, (u.following_count || 0) + (exists ? -1 : 1)),
-      }) : u);
-      return updated;
-    });
-  }, [user]);
+    const isFollowing = followingIds.includes(userId);
+
+    // Optimistic UI update
+    setFollowingIds(prev =>
+      isFollowing ? prev.filter(id => id !== userId) : [...prev, userId]
+    );
+
+    if (isSupabaseConfigured()) {
+      try {
+        if (isFollowing) {
+          await supabase
+            .from('follows')
+            .delete()
+            .eq('follower_id', user.id)
+            .eq('following_id', userId);
+        } else {
+          await supabase
+            .from('follows')
+            .insert({ follower_id: user.id, following_id: userId });
+
+          // Send follow notification to the person being followed
+          await NotificationsService.createNotification(userId, user.id, 'follow');
+        }
+      } catch (err) {
+        // Revert optimistic update on failure
+        console.error('Failed to toggle follow:', err);
+        setFollowingIds(prev =>
+          isFollowing ? [...prev, userId] : prev.filter(id => id !== userId)
+        );
+      }
+    }
+  }, [user, followingIds]);
 
   const addReply = useCallback(async (postId: string, content: string, parentReplyId?: string | null): Promise<Reply | null> => {
     if (!user) return null;
@@ -241,11 +327,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return msg;
   }, [user]);
 
-  const markNotificationsRead = useCallback(() => {
+  const markNotificationsRead = useCallback(async () => {
     if (!user) return;
-    const updated = NotificationsService.markAllAsRead(notifications);
-    setNotifications(updated);
-  }, [user, notifications]);
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    await NotificationsService.markAllAsRead(user.id);
+  }, [user]);
+
+  const markSingleNotificationRead = useCallback(async (id: string) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    await NotificationsService.markSingleAsRead(id);
+  }, []);
 
   const updateUserProfile = useCallback(async (data: Partial<Profile>) => {
     if (!user) return;
@@ -281,6 +372,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     getRepliesForPost,
     sendMessage,
     markNotificationsRead,
+    markSingleNotificationRead,
     updateUserProfile,
   }), [
     user,
@@ -304,6 +396,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     getRepliesForPost,
     sendMessage,
     markNotificationsRead,
+    markSingleNotificationRead,
     updateUserProfile
   ]);
 

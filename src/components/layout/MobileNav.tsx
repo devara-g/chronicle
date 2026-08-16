@@ -8,7 +8,7 @@ import { Home, Search, Bell, Mail, User, Plus } from 'lucide-react';
 
 export function MobileNav() {
   const pathname = usePathname();
-  const { unreadNotifsCount, unreadMessagesCount, openCompose } = useApp();
+  const { unreadNotifsCount, unreadMessagesCount, openCompose, markNotificationsRead } = useApp();
 
   const items = [
     { href: '/', icon: Home },
@@ -38,6 +38,11 @@ export function MobileNav() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={() => {
+                if (item.href === '/notifications' && unreadNotifsCount > 0) {
+                  markNotificationsRead();
+                }
+              }}
               className={`p-3 relative rounded-full transition-colors ${
                 isActive ? 'text-white' : 'text-on-surface-variant hover:text-white'
               }`}
