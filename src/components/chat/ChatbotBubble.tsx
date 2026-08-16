@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, type UIMessage } from 'ai';
-import { X, Send, Infinity, Loader2 } from 'lucide-react';
+import { X, Send, Infinity, Loader2, AlertCircle } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import ReactMarkdown from 'react-markdown';
 
@@ -12,7 +12,7 @@ export function ChatbotBubble() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
-  const { messages, sendMessage, status } = useChat({
+  const { messages, sendMessage, status, error } = useChat({
     transport: new DefaultChatTransport({ api: '/api/chat' }),
   });
   const isLoading = status === 'streaming' || status === 'submitted';
@@ -31,13 +31,26 @@ export function ChatbotBubble() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isOpen]);
+  }, [messages, isLoading, isOpen, error]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
     sendMessage({ text: input });
     setInput('');
+  };
+
+  const getMessageText = (m: any): string => {
+    if (typeof m.content === 'string' && m.content) return m.content;
+    if (Array.isArray(m.parts)) {
+      const text = m.parts
+        .filter((p: any) => p.type === 'text')
+        .map((p: any) => p.text)
+        .join('');
+      if (text) return text;
+    }
+    if (typeof m.text === 'string' && m.text) return m.text;
+    return '';
   };
 
   return (
@@ -105,15 +118,13 @@ export function ChatbotBubble() {
             </div>
           ) : (
             messages.map((m: UIMessage) => {
-              const textContent = m.parts
-                ?.filter((p) => p.type === 'text')
-                .map((p) => (p as { type: 'text'; text: string }).text)
-                .join('');
+              const textContent = getMessageText(m);
+              if (!textContent && m.role !== 'user') return null;
 
               return (
                 <div
                   key={m.id}
-                  className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}
+                  className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'} animate-fade-in`}
                 >
                   <div
                     className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl text-[14px] leading-relaxed ${
@@ -137,7 +148,7 @@ export function ChatbotBubble() {
                           a: ({ children, href }) => <a href={href} className="text-white underline underline-offset-2 hover:text-white/80" target="_blank" rel="noopener noreferrer">{children}</a>,
                         }}
                       >
-                        {textContent ?? ''}
+                        {textContent}
                       </ReactMarkdown>
                     )}
                   </div>
@@ -145,10 +156,20 @@ export function ChatbotBubble() {
               );
             })
           )}
-          {isLoading && messages[messages.length - 1]?.role === 'user' && (
-            <div className="flex items-start">
-              <div className="px-3.5 py-2.5 bg-white/10 border border-white/10 rounded-2xl rounded-tl-xs text-on-surface-variant">
+          {isLoading && (
+            <div className="flex items-start animate-fade-in">
+              <div className="px-3.5 py-2.5 bg-white/10 border border-white/10 rounded-2xl rounded-tl-xs text-on-surface-variant flex items-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                <span className="text-xs font-mono">Chronicle AI sedang mengetik...</span>
+              </div>
+            </div>
+          )}
+          {error && (
+            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400 font-mono flex items-start gap-2 animate-fade-in">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold">Gagal memproses pesan.</p>
+                <p className="opacity-80 mt-0.5">Pastikan <code>GROQ_API_KEY</code> sudah dimasukkan di Vercel Environment Variables.</p>
               </div>
             </div>
           )}

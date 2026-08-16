@@ -1,15 +1,20 @@
 import { createGroq } from '@ai-sdk/groq';
 import { convertToModelMessages, streamText, type UIMessage } from 'ai';
 
-const groq = createGroq({
-  apiKey: process.env.GROQ_API_KEY,
-});
-
 // Allow streaming responses up to 30 seconds
 export const maxDuration = 30;
 
 export async function POST(req: Request) {
   try {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ error: 'GROQ_API_KEY is not configured in environment variables.' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const groq = createGroq({ apiKey });
     const { messages }: { messages: UIMessage[] } = await req.json();
 
     const result = streamText({
@@ -34,11 +39,11 @@ Ingat: Chronicle itu platform microblog tercepat dan terindah. Kamu bagian dari 
     });
 
     return result.toUIMessageStreamResponse();
-  } catch (error) {
+  } catch (error: any) {
     console.error('Chat API Error:', error);
-    return new Response(JSON.stringify({ error: 'Internal Server Error' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ error: error.message || 'Internal Server Error' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
   }
 }
