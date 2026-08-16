@@ -9,6 +9,7 @@ import { Message, Profile } from '@/types';
 import { formatTimeAgo } from '@/lib/utils';
 import { MessagesService } from '@/lib/services/messages.service';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
+import { EmojiPicker } from '@/components/ui/EmojiPicker';
 import { 
   Send, 
   ArrowLeft, 
@@ -32,6 +33,7 @@ function MessagesContent() {
   const [inputMessage, setInputMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
+  const [isEmojiOpen, setIsEmojiOpen] = useState(false);
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [searchUserQuery, setSearchUserQuery] = useState('');
   const [searchedUsers, setSearchedUsers] = useState<Profile[]>([]);
@@ -446,11 +448,26 @@ function MessagesContent() {
 
               {/* Message Input Bar (Fixed & Visible at Mobile Bottom with Safe Area) */}
               <div className="shrink-0 p-2.5 sm:p-3 md:p-4 border-t border-white/10 bg-black/95 backdrop-blur-2xl z-30 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-                <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex items-center gap-2 bg-white/5 border border-white/15 rounded-full px-3 py-1.5 focus-within:border-white/35 focus-within:bg-white/[0.08] transition-all shadow-[0_0_20px_rgba(0,0,0,0.5)]">
+                <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex items-center gap-2 bg-white/5 border border-white/15 rounded-full px-3 py-1.5 focus-within:border-white/35 focus-within:bg-white/[0.08] transition-all shadow-[0_0_20px_rgba(0,0,0,0.5)] relative">
+                  {/* Emoji Picker Popup */}
+                  {isEmojiOpen && (
+                    <EmojiPicker
+                      onSelectEmoji={(emoji) => {
+                        setInputMessage((prev) => prev + emoji);
+                        setIsEmojiOpen(false);
+                      }}
+                      onClose={() => setIsEmojiOpen(false)}
+                      positionClass="bottom-full mb-3 left-0"
+                    />
+                  )}
+
                   <button
                     type="button"
-                    onClick={() => setInputMessage(prev => prev + ' 🖤')}
-                    className="p-1.5 sm:p-2 rounded-full hover:bg-white/10 text-on-surface-variant hover:text-white transition-colors shrink-0"
+                    onClick={() => setIsEmojiOpen((prev) => !prev)}
+                    className={`p-1.5 sm:p-2 rounded-full hover:bg-white/10 text-on-surface-variant hover:text-white transition-colors shrink-0 ${
+                      isEmojiOpen ? 'text-white bg-white/10' : ''
+                    }`}
+                    title="Choose emoji"
                   >
                     <Smile className="w-5 h-5" />
                   </button>

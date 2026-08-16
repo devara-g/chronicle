@@ -180,7 +180,7 @@ export function RightSidebar() {
           <a href="#" className="hover:underline">Privacy Policy</a>
           <a href="#" className="hover:underline">Cookie Policy</a>
           <a href="#" className="hover:underline">Accessibility</a>
-          <span className="w-full mt-1">© 2024 Chronicle Inc.</span>
+          <span className="w-full mt-1">© 2026 Devara Inc.</span>
         </footer>
       </div>
     </aside>

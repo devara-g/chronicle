@@ -4,6 +4,7 @@ import React, { useState, useRef } from 'react';
 import { useApp } from '@/context/AppContext';
 import { X, Image as ImageIcon, Sparkles, Smile } from 'lucide-react';
 import Image from 'next/image';
+import { EmojiPicker } from '@/components/ui/EmojiPicker';
 
 export function ComposeModal() {
   const { isComposeOpen, closeCompose, user, createPost } = useApp();
@@ -11,6 +12,7 @@ export function ComposeModal() {
   const [mediaUrl, setMediaUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [isEmojiOpen, setIsEmojiOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isComposeOpen || !user) return null;
@@ -157,12 +159,28 @@ export function ComposeModal() {
             >
               <Sparkles className="w-5 h-5" />
             </button>
-            <button
-              onClick={() => setContent(prev => prev + ' 🖤')}
-              className="p-2 rounded-full hover:bg-white/10 hover:text-white transition-colors"
-            >
-              <Smile className="w-5 h-5" />
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsEmojiOpen(prev => !prev)}
+                className={`p-2 rounded-full hover:bg-white/10 transition-colors ${
+                  isEmojiOpen ? 'text-white bg-white/10' : 'hover:text-white text-on-surface-variant'
+                }`}
+                title="Add Emoji"
+              >
+                <Smile className="w-5 h-5" />
+              </button>
+              {isEmojiOpen && (
+                <EmojiPicker
+                  onSelectEmoji={(emoji) => {
+                    setContent(prev => prev + emoji);
+                    setIsEmojiOpen(false);
+                  }}
+                  onClose={() => setIsEmojiOpen(false)}
+                  positionClass="top-full mt-2 left-0"
+                />
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-3">

@@ -4,6 +4,7 @@ import React, { useState, useRef } from 'react';
 import { useApp } from '@/context/AppContext';
 import { Image as ImageIcon, Smile, BarChart2, Sparkles, X } from 'lucide-react';
 import Image from 'next/image';
+import { EmojiPicker } from '@/components/ui/EmojiPicker';
 
 interface ComposePostProps {
   placeholder?: string;
@@ -17,6 +18,7 @@ export function ComposePost({ placeholder = "What's happening in the noir?", onS
   const [mediaUrl, setMediaUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [isEmojiOpen, setIsEmojiOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const deleteOrphanedMedia = async (url: string) => {
@@ -165,14 +167,28 @@ export function ComposePost({ placeholder = "What's happening in the noir?", onS
             >
               <Sparkles className="w-4 h-4" />
             </button>
-            <button
-              type="button"
-              onClick={() => setContent(prev => prev + ' 🖤')}
-              className="w-8 h-8 rounded-full hover:bg-white/10 hover:text-white flex items-center justify-center transition-colors"
-              title="Add Emoji"
-            >
-              <Smile className="w-4 h-4" />
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsEmojiOpen(prev => !prev)}
+                className={`w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors ${
+                  isEmojiOpen ? 'text-white bg-white/10' : 'text-on-surface-variant hover:text-white'
+                }`}
+                title="Add Emoji"
+              >
+                <Smile className="w-4 h-4" />
+              </button>
+              {isEmojiOpen && (
+                <EmojiPicker
+                  onSelectEmoji={(emoji) => {
+                    setContent(prev => prev + emoji);
+                    setIsEmojiOpen(false);
+                  }}
+                  onClose={() => setIsEmojiOpen(false)}
+                  positionClass="top-full mt-2 left-0"
+                />
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
