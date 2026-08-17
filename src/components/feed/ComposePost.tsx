@@ -5,6 +5,8 @@ import { useApp } from '@/context/AppContext';
 import { Image as ImageIcon, Smile, BarChart2, Sparkles, X } from 'lucide-react';
 import Image from 'next/image';
 import { EmojiPicker } from '@/components/ui/EmojiPicker';
+import { useMentionAutocomplete } from '@/hooks/useMentionAutocomplete';
+import { MentionDropdown } from '@/components/ui/MentionDropdown';
 
 interface ComposePostProps {
   placeholder?: string;
@@ -20,6 +22,14 @@ export function ComposePost({ placeholder = "What's happening in the noir?", onS
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [isEmojiOpen, setIsEmojiOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // @mention autocomplete
+  const { mention, selectMention, handleKeyDown: handleMentionKeyDown, close: closeMention } = useMentionAutocomplete(
+    content,
+    setContent,
+    textareaRef
+  );
 
   const deleteOrphanedMedia = async (url: string) => {
     if (!url) return;
@@ -79,6 +89,10 @@ export function ComposePost({ placeholder = "What's happening in the noir?", onS
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Mention autocomplete keyboard nav takes priority
+    const handled = handleMentionKeyDown(e);
+    if (handled) return;
+
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault();
       handleSubmit();
@@ -107,14 +121,29 @@ export function ComposePost({ placeholder = "What's happening in the noir?", onS
       </div>
 
       <div className="flex-1 pt-0.5">
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          rows={compact ? 2 : 3}
-          className="w-full bg-transparent border-none text-white text-[16px] md:text-[18px] placeholder:text-outline focus:ring-0 resize-none outline-none font-body leading-relaxed"
-        />
+        {/* Textarea + mention dropdown wrapper */}
+        <div className="relative">
+          <textarea
+            ref={textareaRef}
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onBlur={() => setTimeout(closeMention, 150)}
+            placeholder={placeholder}
+            rows={compact ? 2 : 3}
+            className="w-full bg-transparent border-none text-white text-[16px] md:text-[18px] placeholder:text-outline focus:ring-0 resize-none outline-none font-body leading-relaxed"
+          />
+
+          {/* @mention dropdown */}
+          <MentionDropdown
+            isOpen={mention.isOpen}
+            query={mention.query}
+            results={mention.results}
+            isLoading={mention.isLoading}
+            selectedIndex={mention.selectedIndex}
+            onSelect={selectMention}
+          />
+        </div>
 
         {/* Media Preview */}
         {uploadingMedia ? (
@@ -136,12 +165,12 @@ export function ComposePost({ placeholder = "What's happening in the noir?", onS
 
         <div className="flex justify-between items-center pt-3 border-t border-white/[0.06]">
           <div className="flex items-center gap-1 text-on-surface-variant">
-            <input 
-              type="file" 
-              accept="image/*" 
-              ref={fileInputRef} 
-              onChange={handleFileSelect} 
-              className="hidden" 
+            <input
+              type="file"
+              accept="image/*"
+              ref={fileInputRef}
+              onChange={handleFileSelect}
+              className="hidden"
             />
             <button
               type="button"

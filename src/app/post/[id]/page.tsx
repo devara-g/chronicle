@@ -8,6 +8,8 @@ import { AppShell } from '@/components/layout/AppShell';
 import { useApp } from '@/context/AppContext';
 import { Post, Reply } from '@/types';
 import { formatNumber, formatTimeAgo } from '@/lib/utils';
+import { useMentionAutocomplete } from '@/hooks/useMentionAutocomplete';
+import { MentionDropdown } from '@/components/ui/MentionDropdown';
 import { 
   ArrowLeft, 
   MessageCircle, 
@@ -43,6 +45,13 @@ export default function PostDetailPage() {
   const [replyingTo, setReplyingTo] = useState<ReplyingTarget | null>(null);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const replyInputRef = useRef<HTMLTextAreaElement>(null);
+
+  // @mention autocomplete for reply box
+  const { mention, selectMention, handleKeyDown: handleMentionKeyDown, close: closeMention } = useMentionAutocomplete(
+    replyText,
+    setReplyText,
+    replyInputRef
+  );
 
   useEffect(() => {
     const found = posts.find(p => p.id === postId);
@@ -377,14 +386,34 @@ export default function PostDetailPage() {
               className="w-10 h-10 rounded-full object-cover border border-white/10 flex-shrink-0"
             />
             <div className="flex-1">
-              <textarea
-                ref={replyInputRef}
-                value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                placeholder={replyingTo ? `Reply to @${replyingTo.username}...` : "Post your reply..."}
-                rows={2}
-                className="w-full bg-transparent border-none text-white text-base placeholder:text-outline focus:ring-0 resize-none outline-none font-body leading-relaxed"
-              />
+              <div className="relative">
+                <textarea
+                  ref={replyInputRef}
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  onKeyDown={(e) => {
+                    const handled = handleMentionKeyDown(e);
+                    if (handled) return;
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                      handleReplySubmit(e);
+                    }
+                  }}
+                  onBlur={() => setTimeout(closeMention, 150)}
+                  placeholder={replyingTo ? `Reply to @${replyingTo.username}...` : "Post your reply..."}
+                  rows={2}
+                  className="w-full bg-transparent border-none text-white text-base placeholder:text-outline focus:ring-0 resize-none outline-none font-body leading-relaxed"
+                />
+
+                {/* @mention dropdown */}
+                <MentionDropdown
+                  isOpen={mention.isOpen}
+                  query={mention.query}
+                  results={mention.results}
+                  isLoading={mention.isLoading}
+                  selectedIndex={mention.selectedIndex}
+                  onSelect={selectMention}
+                />
+              </div>
               <div className="flex justify-between items-center pt-2 border-t border-white/[0.06]">
                 <div className="flex items-center gap-1 text-on-surface-variant">
                   <button 

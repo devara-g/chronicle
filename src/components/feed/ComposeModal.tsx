@@ -5,6 +5,8 @@ import { useApp } from '@/context/AppContext';
 import { X, Image as ImageIcon, Sparkles, Smile } from 'lucide-react';
 import Image from 'next/image';
 import { EmojiPicker } from '@/components/ui/EmojiPicker';
+import { useMentionAutocomplete } from '@/hooks/useMentionAutocomplete';
+import { MentionDropdown } from '@/components/ui/MentionDropdown';
 
 export function ComposeModal() {
   const { isComposeOpen, closeCompose, user, createPost } = useApp();
@@ -14,6 +16,14 @@ export function ComposeModal() {
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [isEmojiOpen, setIsEmojiOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // @mention autocomplete
+  const { mention, selectMention, handleKeyDown: handleMentionKeyDown, close: closeMention } = useMentionAutocomplete(
+    content,
+    setContent,
+    textareaRef
+  );
 
   if (!isComposeOpen || !user) return null;
 
@@ -72,6 +82,15 @@ export function ComposeModal() {
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const handled = handleMentionKeyDown(e);
+    if (handled) return;
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-24 px-4 bg-black/80 backdrop-blur-md animate-fade-in">
       <div 
@@ -104,14 +123,30 @@ export function ComposeModal() {
           />
 
           <div className="flex-1 min-w-0">
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="What's happening in the noir?"
-              rows={4}
-              autoFocus
-              className="w-full bg-transparent border-none text-white text-[17px] placeholder:text-outline focus:ring-0 resize-none outline-none font-body leading-relaxed"
-            />
+            {/* Textarea with mention dropdown */}
+            <div className="relative">
+              <textarea
+                ref={textareaRef}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onBlur={() => setTimeout(closeMention, 150)}
+                placeholder="What's happening in the noir?"
+                rows={4}
+                autoFocus
+                className="w-full bg-transparent border-none text-white text-[17px] placeholder:text-outline focus:ring-0 resize-none outline-none font-body leading-relaxed"
+              />
+
+              {/* @mention dropdown */}
+              <MentionDropdown
+                isOpen={mention.isOpen}
+                query={mention.query}
+                results={mention.results}
+                isLoading={mention.isLoading}
+                selectedIndex={mention.selectedIndex}
+                onSelect={selectMention}
+              />
+            </div>
 
             {/* Media Preview */}
             {uploadingMedia ? (
