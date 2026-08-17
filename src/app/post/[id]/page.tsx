@@ -21,6 +21,7 @@ import {
   CornerDownRight
 } from 'lucide-react';
 import { ImageLightboxModal } from '@/components/ui/ImageLightboxModal';
+import { RichText } from '@/components/ui/RichText';
 
 interface ReplyingTarget {
   id: string;
@@ -141,7 +142,7 @@ export default function PostDetailPage() {
             </div>
 
             <p className="text-white text-sm leading-relaxed font-body mb-2.5 whitespace-pre-wrap">
-              {rep.content}
+              <RichText text={rep.content} />
             </p>
 
             {/* Actions on Reply */}
@@ -219,7 +220,7 @@ export default function PostDetailPage() {
 
         {/* Post Text */}
         <p className="text-white text-[18px] md:text-[20px] leading-relaxed font-body whitespace-pre-wrap mb-4">
-          {post.content}
+          <RichText text={post.content} />
         </p>
 
         {/* Media Attachment */}

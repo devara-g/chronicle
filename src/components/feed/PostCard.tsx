@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { EditPostModal } from '@/components/modals/EditPostModal';
 import { ImageLightboxModal } from '@/components/ui/ImageLightboxModal';
+import { RichText } from '@/components/ui/RichText';
 
 interface PostCardProps {
   post: Post;
@@ -166,7 +167,7 @@ export function PostCard({ post, showBorder = true }: PostCardProps) {
 
         {/* Content */}
         <p className="text-white text-[15px] md:text-[16px] leading-relaxed font-body whitespace-pre-wrap mb-3">
-          {post.content}
+          <RichText text={post.content} />
         </p>
 
         {/* Media Preview if attached */}

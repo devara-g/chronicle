@@ -15,7 +15,8 @@ import {
   Feather,
   Sparkles,
   MoreHorizontal,
-  Infinity
+  Infinity,
+  Bookmark
 } from 'lucide-react';
 
 export function SidebarNav() {
@@ -27,6 +28,7 @@ export function SidebarNav() {
     { label: 'Explore', href: '/explore', icon: Search, badge: 0 },
     { label: 'Notifications', href: '/notifications', icon: Bell, badge: unreadNotifsCount },
     { label: 'Messages', href: '/messages', icon: Mail, badge: unreadMessagesCount },
+    { label: 'Bookmarks', href: '/bookmarks', icon: Bookmark, badge: 0 },
     { label: 'Profile', href: '/profile', icon: User, badge: 0 },
     { label: 'Settings', href: '/settings', icon: Settings, badge: 0 },
   ];

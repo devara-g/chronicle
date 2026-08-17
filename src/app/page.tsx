@@ -1,27 +1,65 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
 import { ComposePost } from '@/components/feed/ComposePost';
 import { PostCard } from '@/components/feed/PostCard';
 import { useApp } from '@/context/AppContext';
-import { Sparkles } from 'lucide-react';
+import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { PullToRefreshIndicator } from '@/components/ui/PullToRefreshIndicator';
+import { Loader2, Sparkles } from 'lucide-react';
 
 export default function HomePage() {
-  const { user, posts, followingIds, loading } = useApp();
+  const {
+    user,
+    posts,
+    followingIds,
+    loading,
+    hasMorePosts,
+    isLoadingMorePosts,
+    loadMorePosts,
+    refreshPosts,
+  } = useApp();
   const [tab, setTab] = useState<'for_you' | 'following'>('for_you');
 
-  const displayedPosts = tab === 'for_you' 
-    ? posts 
-    : posts.filter(p => followingIds.includes(p.user_id) || p.user_id === user?.id);
+  const displayedPosts =
+    tab === 'for_you'
+      ? posts
+      : posts.filter((p) => followingIds.includes(p.user_id) || p.user_id === user?.id);
+
+  // Infinite scroll sentinel
+  const { sentinelRef } = useInfiniteScroll({
+    onLoadMore: loadMorePosts,
+    hasMore: hasMorePosts,
+    isLoading: isLoadingMorePosts,
+  });
+
+  // Pull to refresh (mobile)
+  const handleRefresh = useCallback(async () => {
+    await refreshPosts();
+  }, [refreshPosts]);
+
+  const { isPulling, pullDistance, isRefreshing } = usePullToRefresh({
+    onRefresh: handleRefresh,
+    threshold: 80,
+  });
 
   return (
     <AppShell>
+      {/* Pull to Refresh Visual Indicator */}
+      <PullToRefreshIndicator
+        isPulling={isPulling}
+        pullDistance={pullDistance}
+        isRefreshing={isRefreshing}
+        threshold={80}
+      />
+
       {/* Sticky Header / Feed Tabs */}
       <div className="sticky top-0 z-30 w-full bg-black/80 backdrop-blur-xl border-b border-white/10">
         <div className="flex justify-between items-center h-14 px-4">
           <h1 className="font-headline text-xl font-bold text-primary tracking-tight">Home</h1>
-          <button 
+          <button
             className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-on-surface-variant hover:text-white transition-colors"
             title="Custom feed options"
           >
@@ -72,11 +110,27 @@ export default function HomePage() {
             <p className="text-xs font-mono">Follow more accounts or write your first chronicle above.</p>
           </div>
         ) : (
-          displayedPosts.map((post) => (
-            <PostCard key={post.id} post={post} />
-          ))
+          displayedPosts.map((post) => <PostCard key={post.id} post={post} />)
         )}
       </div>
+
+      {/* Infinite Scroll Sentinel */}
+      <div ref={sentinelRef} className="h-4" />
+
+      {/* Loading more indicator */}
+      {isLoadingMorePosts && (
+        <div className="flex justify-center items-center py-6 text-on-surface-variant">
+          <Loader2 className="w-5 h-5 animate-spin mr-2" />
+          <span className="text-xs font-mono">Loading more chronicles...</span>
+        </div>
+      )}
+
+      {/* End of feed indicator */}
+      {!hasMorePosts && !loading && displayedPosts.length > 0 && (
+        <div className="py-8 text-center text-on-surface-variant text-xs font-mono opacity-50">
+          — end of feed —
+        </div>
+      )}
     </AppShell>
   );
 }

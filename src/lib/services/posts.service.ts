@@ -1,11 +1,20 @@
 import { Post, Reply, Profile } from '@/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 
+const PAGE_SIZE = 20;
+
 export const PostsService = {
-  // Get all posts for feed with accurate counts from related tables
-  async getPosts(currentUserId?: string): Promise<Post[]> {
+  // Get paginated posts for feed with accurate counts from related tables
+  async getPosts(
+    currentUserId?: string,
+    page = 0,
+    limit = PAGE_SIZE
+  ): Promise<{ posts: Post[]; hasMore: boolean }> {
     if (isSupabaseConfigured()) {
       try {
+        const from = page * limit;
+        const to = from + limit - 1;
+
         const { data, error } = await supabase
           .from('posts')
           .select(`
@@ -16,27 +25,29 @@ export const PostsService = {
             reposts(count),
             bookmarks(count)
           `)
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .range(from, to);
 
-        if (!error && data && data.length > 0) {
-          // If user is logged in, optionally fetch which posts user liked/reposted/bookmarked
+        if (!error && data) {
+          // If user is logged in, fetch interaction state for this page
           let userLikedPostIds = new Set<string>();
           let userRepostedPostIds = new Set<string>();
           let userBookmarkedPostIds = new Set<string>();
 
-          if (currentUserId) {
+          if (currentUserId && data.length > 0) {
+            const ids = data.map((d: any) => d.id);
             const [likesRes, repostsRes, bookmarksRes] = await Promise.all([
-              supabase.from('likes').select('post_id').eq('user_id', currentUserId),
-              supabase.from('reposts').select('post_id').eq('user_id', currentUserId),
-              supabase.from('bookmarks').select('post_id').eq('user_id', currentUserId),
+              supabase.from('likes').select('post_id').eq('user_id', currentUserId).in('post_id', ids),
+              supabase.from('reposts').select('post_id').eq('user_id', currentUserId).in('post_id', ids),
+              supabase.from('bookmarks').select('post_id').eq('user_id', currentUserId).in('post_id', ids),
             ]);
 
-            if (likesRes.data) userLikedPostIds = new Set(likesRes.data.map(l => l.post_id));
-            if (repostsRes.data) userRepostedPostIds = new Set(repostsRes.data.map(r => r.post_id));
-            if (bookmarksRes.data) userBookmarkedPostIds = new Set(bookmarksRes.data.map(b => b.post_id));
+            if (likesRes.data) userLikedPostIds = new Set(likesRes.data.map((l: any) => l.post_id));
+            if (repostsRes.data) userRepostedPostIds = new Set(repostsRes.data.map((r: any) => r.post_id));
+            if (bookmarksRes.data) userBookmarkedPostIds = new Set(bookmarksRes.data.map((b: any) => b.post_id));
           }
 
-          return data.map((item: any) => {
+          const posts = data.map((item: any) => {
             const repliesCount = item.replies?.[0]?.count ?? 0;
             const likesCount = item.likes?.[0]?.count ?? 0;
             const repostsCount = item.reposts?.[0]?.count ?? 0;
@@ -59,12 +70,14 @@ export const PostsService = {
               is_bookmarked: userBookmarkedPostIds.has(item.id),
             };
           });
+
+          return { posts, hasMore: data.length === limit };
         }
       } catch (e) {
         console.warn('Supabase fetch failed:', e);
       }
     }
-    return [];
+    return { posts: [], hasMore: false };
   },
 
   // Create new post

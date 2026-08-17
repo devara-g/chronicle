@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
-import { Home, Search, Bell, Mail, User, Plus, Infinity } from 'lucide-react';
+import { Home, Search, Bell, Mail, Bookmark, Plus, Infinity } from 'lucide-react';
 
 export function MobileNav() {
   const pathname = usePathname();
@@ -19,7 +19,7 @@ export function MobileNav() {
     { href: '/explore', icon: Search, label: 'Explore' },
     { href: '/notifications', icon: Bell, label: 'Notifications', badge: unreadNotifsCount },
     { href: '/messages', icon: Mail, label: 'Messages', badge: unreadMessagesCount },
-    { href: '/profile', icon: User, label: 'Profile' },
+    { href: '/bookmarks', icon: Bookmark, label: 'Bookmarks' },
   ];
 
   return (

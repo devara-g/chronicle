@@ -20,6 +20,8 @@ interface AppContextType {
   isComposeOpen: boolean;
   searchQuery: string;
   loading: boolean;
+  hasMorePosts: boolean;
+  isLoadingMorePosts: boolean;
   openCompose: () => void;
   closeCompose: () => void;
   setSearchQuery: (query: string) => void;
@@ -39,6 +41,8 @@ interface AppContextType {
   markNotificationsRead: () => Promise<void>;
   markSingleNotificationRead: (id: string) => Promise<void>;
   updateUserProfile: (data: Partial<Profile>) => Promise<void>;
+  loadMorePosts: () => Promise<void>;
+  refreshPosts: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -53,6 +57,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [hasMorePosts, setHasMorePosts] = useState(true);
+  const [isLoadingMorePosts, setIsLoadingMorePosts] = useState(false);
+  const currentPageRef = React.useRef(0);
 
   // Initial data loading
   useEffect(() => {
@@ -61,8 +68,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const loadedProfile = await AuthService.getCurrentProfile();
         setUser(loadedProfile);
 
-        const [loadedPosts, followsData, notifData, loadedConvs] = await Promise.all([
-          PostsService.getPosts(loadedProfile?.id),
+        const [{ posts: loadedPosts, hasMore }, followsData, notifData, loadedConvs] = await Promise.all([
+          PostsService.getPosts(loadedProfile?.id, 0),
           loadedProfile && isSupabaseConfigured()
             ? supabase.from('follows').select('following_id').eq('follower_id', loadedProfile.id)
             : Promise.resolve({ data: null }),
@@ -71,6 +78,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ]);
 
         setPosts(loadedPosts);
+        setHasMorePosts(hasMore);
+        currentPageRef.current = 0;
         setConversations(loadedConvs);
         if (followsData.data) {
           setFollowingIds(followsData.data.map((f: any) => f.following_id));
@@ -216,6 +225,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const openCompose = useCallback(() => setIsComposeOpen(true), []);
   const closeCompose = useCallback(() => setIsComposeOpen(false), []);
+
+  const loadMorePosts = useCallback(async () => {
+    if (isLoadingMorePosts || !hasMorePosts) return;
+    setIsLoadingMorePosts(true);
+    try {
+      const nextPage = currentPageRef.current + 1;
+      const { posts: morePosts, hasMore } = await PostsService.getPosts(user?.id, nextPage);
+      if (morePosts.length > 0) {
+        setPosts(prev => {
+          const existingIds = new Set(prev.map(p => p.id));
+          const deduped = morePosts.filter(p => !existingIds.has(p.id));
+          return [...prev, ...deduped];
+        });
+        currentPageRef.current = nextPage;
+      }
+      setHasMorePosts(hasMore);
+    } catch (e) {
+      console.error('Failed to load more posts:', e);
+    } finally {
+      setIsLoadingMorePosts(false);
+    }
+  }, [isLoadingMorePosts, hasMorePosts, user?.id]);
+
+  const refreshPosts = useCallback(async () => {
+    try {
+      const { posts: freshPosts, hasMore } = await PostsService.getPosts(user?.id, 0);
+      setPosts(freshPosts);
+      setHasMorePosts(hasMore);
+      currentPageRef.current = 0;
+    } catch (e) {
+      console.error('Failed to refresh posts:', e);
+    }
+  }, [user?.id]);
 
   const createPost = useCallback(async (content: string, mediaUrl?: string | null): Promise<Post | null> => {
     if (!user) return null;
@@ -514,6 +556,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     isComposeOpen,
     searchQuery,
     loading,
+    hasMorePosts,
+    isLoadingMorePosts,
     openCompose,
     closeCompose,
     setSearchQuery,
@@ -533,6 +577,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     markNotificationsRead,
     markSingleNotificationRead,
     updateUserProfile,
+    loadMorePosts,
+    refreshPosts,
   }), [
     user,
     posts,
@@ -544,6 +590,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     isComposeOpen,
     searchQuery,
     loading,
+    hasMorePosts,
+    isLoadingMorePosts,
     openCompose,
     closeCompose,
     createPost,
@@ -559,7 +607,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     markAllMessagesAsRead,
     markNotificationsRead,
     markSingleNotificationRead,
-    updateUserProfile
+    updateUserProfile,
+    loadMorePosts,
+    refreshPosts,
   ]);
 
   return (
