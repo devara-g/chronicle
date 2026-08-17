@@ -120,9 +120,9 @@ export function ComposePost({ placeholder = "What's happening in the noir?", onS
         />
       </div>
 
-      <div className="flex-1 pt-0.5">
+      <div className="flex-1 pt-0.5 overflow-visible">
         {/* Textarea + mention dropdown wrapper */}
-        <div className="relative">
+        <div className="relative overflow-visible">
           <textarea
             ref={textareaRef}
             value={content}

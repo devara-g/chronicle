@@ -113,7 +113,7 @@ export function ComposeModal() {
         </div>
 
         {/* Form Body */}
-        <div className="p-4 flex gap-3.5 max-h-[70vh] overflow-y-auto">
+        <div className="p-4 flex gap-3.5 max-h-[70vh] overflow-y-auto overflow-x-visible">
           <Image
             src={user.avatar_url || '/default-avatar.jpg'}
             alt={user.full_name}
@@ -122,9 +122,9 @@ export function ComposeModal() {
             className="w-11 h-11 rounded-full object-cover border border-white/10 flex-shrink-0 mt-1"
           />
 
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 overflow-visible">
             {/* Textarea with mention dropdown */}
-            <div className="relative">
+            <div className="relative overflow-visible">
               <textarea
                 ref={textareaRef}
                 value={content}

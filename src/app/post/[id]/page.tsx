@@ -385,8 +385,8 @@ export default function PostDetailPage() {
               height={40}
               className="w-10 h-10 rounded-full object-cover border border-white/10 flex-shrink-0"
             />
-            <div className="flex-1">
-              <div className="relative">
+            <div className="flex-1 overflow-visible">
+              <div className="relative overflow-visible">
                 <textarea
                   ref={replyInputRef}
                   value={replyText}

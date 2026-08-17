@@ -26,8 +26,8 @@ export function MentionDropdown({
 
   return (
     <div
-      className="absolute left-0 z-50 w-72 bg-[#111111] border border-white/15 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.8)] overflow-hidden animate-fade-in"
-      style={{ bottom: 'calc(100% + 8px)' }}
+      className="absolute left-0 z-[9999] w-72 bg-[#111111] border border-white/15 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.8)] overflow-hidden animate-fade-in"
+      style={{ top: 'calc(100% + 4px)' }}
       // Prevent mouse down from blurring the textarea
       onMouseDown={(e) => e.preventDefault()}
     >

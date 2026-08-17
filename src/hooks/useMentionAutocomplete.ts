@@ -5,13 +5,13 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 interface MentionState {
   isOpen: boolean;
   query: string;
-  startIndex: number; // position of the '@' in the string
+  startIndex: number;
   results: Profile[];
   isLoading: boolean;
   selectedIndex: number;
 }
 
-const INITIAL_STATE: MentionState = {
+const CLOSED: MentionState = {
   isOpen: false,
   query: '',
   startIndex: -1,
@@ -20,28 +20,28 @@ const INITIAL_STATE: MentionState = {
   selectedIndex: 0,
 };
 
-/**
- * Hook that detects @mention triggers in a textarea and fetches matching profiles.
- *
- * Usage:
- *   const { mention, textareaProps, selectMention, MentionDropdownProps } = useMentionAutocomplete(content, setContent, textareaRef);
- */
 export function useMentionAutocomplete(
   content: string,
   setContent: (val: string) => void,
   textareaRef: React.RefObject<HTMLTextAreaElement | null>
 ) {
-  const [mention, setMention] = useState<MentionState>(INITIAL_STATE);
-  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [mention, setMention] = useState<MentionState>(CLOSED);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastQueryRef = useRef<string>('');
 
-  const close = useCallback(() => setMention(INITIAL_STATE), []);
+  const close = useCallback(() => {
+    setMention(CLOSED);
+    lastQueryRef.current = '';
+  }, []);
 
-  // Detect @trigger on every content change
+  // Main detection: runs on every content change
   useEffect(() => {
-    const cursor = textareaRef.current?.selectionStart ?? content.length;
+    // Get cursor position — use textarea ref directly
+    const el = textareaRef.current;
+    const cursor = el?.selectionStart ?? content.length;
     const textBeforeCursor = content.slice(0, cursor);
 
-    // Find the last @ before cursor that hasn't been closed by whitespace
+    // Find @trigger: last @ before cursor with no space after it
     const match = textBeforeCursor.match(/@([\w]*)$/);
 
     if (!match) {
@@ -49,46 +49,77 @@ export function useMentionAutocomplete(
       return;
     }
 
-    const query = match[1]; // the part after @
-    const startIndex = textBeforeCursor.lastIndexOf('@');
+    const query = match[1];
+    const startIndex = cursor - 1 - query.length; // position of @
 
-    setMention((prev) => ({
+    // Avoid redundant searches
+    if (query === lastQueryRef.current && mention.isOpen) {
+      setMention(prev => ({ ...prev, startIndex, selectedIndex: 0 }));
+      return;
+    }
+
+    lastQueryRef.current = query;
+
+    setMention(prev => ({
       ...prev,
       isOpen: true,
       query,
       startIndex,
       selectedIndex: 0,
+      results: query === '' ? prev.results : prev.results, // keep stale while loading
     }));
 
     // Debounce DB search
-    if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    debounceTimer.current = setTimeout(async () => {
-      if (!isSupabaseConfigured()) return;
-      setMention((p) => ({ ...p, isLoading: true }));
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      if (!isSupabaseConfigured()) {
+        setMention(prev => ({ ...prev, isLoading: false }));
+        return;
+      }
+
+      setMention(prev => ({ ...prev, isLoading: true }));
+
       try {
-        const { data } = await supabase
+        let queryBuilder = supabase
           .from('profiles')
           .select('id, username, full_name, avatar_url')
-          .or(`username.ilike.${query}%,full_name.ilike.${query}%`)
-          .limit(5);
-        setMention((p) => ({ ...p, results: data ?? [], isLoading: false }));
+          .limit(6);
+
+        if (query.trim()) {
+          queryBuilder = queryBuilder.or(
+            `username.ilike.${query}%,full_name.ilike.${query}%`
+          );
+        } else {
+          // No query yet — show recent/any profiles
+          queryBuilder = queryBuilder.order('created_at', { ascending: false });
+        }
+
+        const { data, error } = await queryBuilder;
+        if (!error) {
+          setMention(prev => ({
+            ...prev,
+            results: (data as Profile[]) ?? [],
+            isLoading: false,
+          }));
+        } else {
+          setMention(prev => ({ ...prev, isLoading: false }));
+        }
       } catch {
-        setMention((p) => ({ ...p, isLoading: false }));
+        setMention(prev => ({ ...prev, isLoading: false }));
       }
     }, 180);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content]);
 
-  // Select a user from the dropdown
   const selectMention = useCallback(
     (profile: Profile) => {
       const before = content.slice(0, mention.startIndex);
-      const after = content.slice(mention.startIndex + 1 + mention.query.length); // skip @query
+      const after = content.slice(mention.startIndex + 1 + mention.query.length);
       const inserted = `@${profile.username} `;
       const newContent = before + inserted + after;
       setContent(newContent);
       close();
-      // Move cursor to end of inserted mention
+      // Restore cursor position after insert
       setTimeout(() => {
         const el = textareaRef.current;
         if (!el) return;
@@ -100,29 +131,33 @@ export function useMentionAutocomplete(
     [content, mention.startIndex, mention.query.length, setContent, close, textareaRef]
   );
 
-  // Keyboard navigation inside dropdown
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    (e: React.KeyboardEvent<HTMLTextAreaElement>): boolean => {
       if (!mention.isOpen || mention.results.length === 0) return false;
 
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setMention((p) => ({ ...p, selectedIndex: (p.selectedIndex + 1) % p.results.length }));
+        setMention(prev => ({
+          ...prev,
+          selectedIndex: (prev.selectedIndex + 1) % prev.results.length,
+        }));
         return true;
       }
       if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setMention((p) => ({
-          ...p,
-          selectedIndex: (p.selectedIndex - 1 + p.results.length) % p.results.length,
+        setMention(prev => ({
+          ...prev,
+          selectedIndex: (prev.selectedIndex - 1 + prev.results.length) % prev.results.length,
         }));
         return true;
       }
       if (e.key === 'Enter' || e.key === 'Tab') {
-        e.preventDefault();
         const selected = mention.results[mention.selectedIndex];
-        if (selected) selectMention(selected);
-        return true;
+        if (selected) {
+          e.preventDefault();
+          selectMention(selected);
+          return true;
+        }
       }
       if (e.key === 'Escape') {
         close();
