@@ -33,6 +33,8 @@ interface AppContextType {
   toggleBookmark: (postId: string) => void;
   toggleFollow: (userId: string) => Promise<void>;
   addReply: (postId: string, content: string, parentReplyId?: string | null) => Promise<Reply | null>;
+  updateReply: (replyId: string, content: string) => Promise<boolean>;
+  deleteReply: (replyId: string) => Promise<boolean>;
   getRepliesForPost: (postId: string) => Promise<Reply[]>;
   sendMessage: (conversationId: string, content: string) => Promise<Message | null>;
   refreshConversations: () => Promise<void>;
@@ -448,7 +450,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user, followingIds]);
 
-  const addReply = useCallback(async (postId: string, content: string, parentReplyId?: string | null): Promise<Reply | null> => {
+  const addReply = useCallback(async (postId: string, content: string, parentReplyId?: string | null) => {
     if (!user) return null;
     const reply = await PostsService.createReply(postId, content, user, parentReplyId);
     if (reply) {
@@ -471,6 +473,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     return reply;
   }, [user, posts]);
+
+  const updateReply = useCallback(async (replyId: string, content: string) => {
+    return await PostsService.updateReply(replyId, content);
+  }, []);
+
+  const deleteReply = useCallback(async (replyId: string) => {
+    return await PostsService.deleteReply(replyId);
+  }, []);
 
   const getRepliesForPost = useCallback(async (postId: string) => {
     return await PostsService.getReplies(postId);
@@ -569,6 +579,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     toggleBookmark,
     toggleFollow,
     addReply,
+    updateReply,
+    deleteReply,
     getRepliesForPost,
     sendMessage,
     refreshConversations,
@@ -600,6 +612,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     toggleBookmark,
     toggleFollow,
     addReply,
+    updateReply,
+    deleteReply,
     getRepliesForPost,
     sendMessage,
     refreshConversations,

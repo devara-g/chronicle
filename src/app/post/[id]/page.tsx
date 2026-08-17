@@ -20,7 +20,10 @@ import {
   Check, 
   Sparkles,
   X,
-  CornerDownRight
+  CornerDownRight,
+  MoreHorizontal,
+  Trash2,
+  Edit2
 } from 'lucide-react';
 import { ImageLightboxModal } from '@/components/ui/ImageLightboxModal';
 import { RichText } from '@/components/ui/RichText';
@@ -35,15 +38,19 @@ export default function PostDetailPage() {
   const params = useParams();
   const router = useRouter();
   const postId = params.id as string;
-  const { posts, user, toggleLike, toggleRepost, toggleBookmark, addReply, getRepliesForPost } = useApp();
+  const { posts, user, toggleLike, toggleRepost, toggleBookmark, addReply, getRepliesForPost, deleteReply, updateReply } = useApp();
 
   const [post, setPost] = useState<Post | undefined>(undefined);
   const [replies, setReplies] = useState<Reply[]>([]);
   const [replyText, setReplyText] = useState('');
   const [loadingReply, setLoadingReply] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<ReplyingTarget | null>(null);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [editingReplyId, setEditingReplyId] = useState<string | null>(null);
+  const [editReplyText, setEditReplyText] = useState('');
+  const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
   const replyInputRef = useRef<HTMLTextAreaElement>(null);
 
   // @mention autocomplete for reply box
@@ -99,12 +106,32 @@ export default function PostDetailPage() {
     setReplyingTo({
       id: rep.id,
       authorName: rep.author?.full_name || 'User',
-      username: rep.author?.username || 'user',
+      username: rep.author?.username || 'user'
     });
+    // Scroll and focus
     setTimeout(() => {
       replyInputRef.current?.focus();
-      replyInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 50);
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    }, 100);
+  };
+
+  const handleDeleteReply = async (replyId: string) => {
+    if (confirm('Are you sure you want to delete this reply?')) {
+      const success = await deleteReply(replyId);
+      if (success) {
+        setReplies(prev => prev.filter(r => r.id !== replyId));
+      }
+    }
+    setActiveDropdownId(null);
+  };
+
+  const handleUpdateReply = async (replyId: string) => {
+    if (!editReplyText.trim()) return;
+    const success = await updateReply(replyId, editReplyText.trim());
+    if (success) {
+      setReplies(prev => prev.map(r => r.id === replyId ? { ...r, content: editReplyText.trim() } : r));
+      setEditingReplyId(null);
+    }
   };
 
   const handleShare = () => {
@@ -139,20 +166,80 @@ export default function PostDetailPage() {
 
           {/* Content */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <Link 
-                href={`/profile/${rep.author?.username || 'user'}`}
-                className="font-bold text-white text-sm hover:underline"
-              >
-                {rep.author?.full_name}
-              </Link>
-              <span className="text-on-surface-variant text-xs font-mono">@{rep.author?.username}</span>
-              <span className="text-on-surface-variant text-[11px] font-mono">· {formatTimeAgo(rep.created_at)}</span>
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <Link 
+                  href={`/profile/${rep.author?.username || 'user'}`}
+                  className="font-bold text-white text-sm hover:underline"
+                >
+                  {rep.author?.full_name}
+                </Link>
+                <span className="text-on-surface-variant text-xs font-mono">@{rep.author?.username}</span>
+                <span className="text-on-surface-variant text-[11px] font-mono">· {formatTimeAgo(rep.created_at)}</span>
+              </div>
+              
+              {/* Dropdown Menu */}
+              {user?.id === rep.user_id && (
+                <div className="relative">
+                  <button 
+                    onClick={() => setActiveDropdownId(activeDropdownId === rep.id ? null : rep.id)}
+                    className="p-1 rounded-full text-on-surface-variant hover:text-white hover:bg-white/10 transition-colors"
+                  >
+                    <MoreHorizontal className="w-4 h-4" />
+                  </button>
+                  
+                  {activeDropdownId === rep.id && (
+                    <div className="absolute right-0 top-full mt-1 w-32 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl py-1 z-50 animate-in fade-in zoom-in-95 duration-200">
+                      <button
+                        onClick={() => {
+                          setEditingReplyId(rep.id);
+                          setEditReplyText(rep.content);
+                          setActiveDropdownId(null);
+                        }}
+                        className="w-full text-left px-3 py-1.5 text-xs font-headline hover:bg-white/5 flex items-center gap-2 transition-colors text-white"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" /> Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteReply(rep.id)}
+                        className="w-full text-left px-3 py-1.5 text-xs font-headline hover:bg-white/5 flex items-center gap-2 transition-colors text-red-400 hover:text-red-300"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
-            <p className="text-white text-sm leading-relaxed font-body mb-2.5 whitespace-pre-wrap">
-              <RichText text={rep.content} />
-            </p>
+            {editingReplyId === rep.id ? (
+              <div className="mt-2 mb-3">
+                <textarea
+                  value={editReplyText}
+                  onChange={(e) => setEditReplyText(e.target.value)}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-sm text-white resize-none focus:outline-none focus:border-primary/50"
+                  rows={3}
+                />
+                <div className="flex justify-end gap-2 mt-2">
+                  <button
+                    onClick={() => setEditingReplyId(null)}
+                    className="px-3 py-1.5 rounded-full text-xs font-bold text-white hover:bg-white/10 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleUpdateReply(rep.id)}
+                    className="px-3 py-1.5 rounded-full text-xs font-bold bg-primary text-black hover:bg-white/90 transition-colors"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-white text-sm leading-relaxed font-body mb-2.5 whitespace-pre-wrap">
+                <RichText text={rep.content} />
+              </p>
+            )}
 
             {/* Actions on Reply */}
             <div className="flex items-center gap-6 text-on-surface-variant text-xs font-mono">
@@ -187,6 +274,19 @@ export default function PostDetailPage() {
       </div>
     );
   };
+
+  let mediaUrls: string[] = [];
+  if (post?.media_url) {
+    try {
+      if (post.media_url.startsWith('[')) {
+        mediaUrls = JSON.parse(post.media_url);
+      } else {
+        mediaUrls = [post.media_url];
+      }
+    } catch {
+      mediaUrls = [post.media_url];
+    }
+  }
 
   return (
     <AppShell>
@@ -233,30 +333,45 @@ export default function PostDetailPage() {
         </p>
 
         {/* Media Attachment */}
-        {post.media_url && (
+        {mediaUrls.length > 0 && (
           <>
-            <div
-              onClick={() => setIsLightboxOpen(true)}
-              className="rounded-2xl overflow-hidden border border-white/10 mb-4 bg-black/40 cursor-pointer group/img relative"
-              title="Click to expand"
-            >
-              <Image
-                src={post.media_url}
-                alt="Post media"
-                width={800}
-                height={600}
-                className="w-full h-auto max-h-[600px] object-contain group-hover/img:scale-[1.01] transition-transform duration-300"
-                loading="lazy"
-              />
-              <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/15 transition-colors pointer-events-none" />
+            <div className={`mb-4 grid gap-2 ${
+              mediaUrls.length === 1 ? 'grid-cols-1' :
+              mediaUrls.length === 2 ? 'grid-cols-2' :
+              mediaUrls.length === 3 ? 'grid-cols-2' : 'grid-cols-2'
+            }`}>
+              {mediaUrls.map((url, idx) => (
+                <div
+                  key={url}
+                  onClick={() => setLightboxUrl(url)}
+                  className={`rounded-2xl overflow-hidden border border-white/10 bg-black/40 cursor-pointer group/img relative ${
+                    mediaUrls.length === 1 ? 'max-h-[600px]' :
+                    mediaUrls.length === 3 && idx === 0 ? 'col-span-2 aspect-[2/1]' : 'aspect-square'
+                  }`}
+                  title="Click to expand"
+                >
+                  <Image
+                    src={url}
+                    alt={`Post media ${idx + 1}`}
+                    fill={mediaUrls.length > 1}
+                    width={mediaUrls.length === 1 ? 800 : undefined}
+                    height={mediaUrls.length === 1 ? 600 : undefined}
+                    className={`w-full ${mediaUrls.length === 1 ? 'h-auto max-h-[600px] object-contain' : 'h-full object-cover'} group-hover/img:scale-[1.01] transition-transform duration-300`}
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/15 transition-colors pointer-events-none" />
+                </div>
+              ))}
             </div>
-
-            <ImageLightboxModal
-              isOpen={isLightboxOpen}
-              imageUrl={post.media_url}
-              altText={post.content.substring(0, 60) || 'Post media'}
-              onClose={() => setIsLightboxOpen(false)}
-            />
+            
+            {lightboxUrl && (
+              <ImageLightboxModal
+                isOpen={!!lightboxUrl}
+                imageUrl={lightboxUrl}
+                altText={post.content.substring(0, 60) || 'Post media'}
+                onClose={() => setLightboxUrl(null)}
+              />
+            )}
           </>
         )}
 

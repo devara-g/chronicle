@@ -5,6 +5,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { useApp } from '@/context/AppContext';
 import { PostCard } from '@/components/feed/PostCard';
 import { EditProfileModal } from '@/components/modals/EditProfileModal';
+import { FollowListModal } from '@/components/modals/FollowListModal';
 import Image from 'next/image';
 import { formatNumber } from '@/lib/utils';
 import { Calendar, Link as LinkIcon, Sparkles } from 'lucide-react';
@@ -14,6 +15,8 @@ export default function ProfilePage() {
   const { user, posts, followingIds } = useApp();
   const [activeTab, setActiveTab] = useState<'posts' | 'replies' | 'media' | 'likes'>('posts');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isFollowListOpen, setIsFollowListOpen] = useState(false);
+  const [followListTab, setFollowListTab] = useState<'followers' | 'following'>('followers');
   const [followCounts, setFollowCounts] = useState({ following: 0, followers: 0 });
 
   useEffect(() => {
@@ -127,14 +130,26 @@ export default function ProfilePage() {
 
           {/* Following / Followers Stats */}
           <div className="flex items-center gap-5 pt-1 text-sm font-body">
-            <div className="flex items-center gap-1">
-              <strong className="text-white font-semibold font-mono">{formatNumber(followCounts.following)}</strong>
+            <button 
+              onClick={() => {
+                setFollowListTab('following');
+                setIsFollowListOpen(true);
+              }}
+              className="flex items-center gap-1 hover:underline group"
+            >
+              <strong className="text-white font-semibold font-mono group-hover:text-primary transition-colors">{formatNumber(followCounts.following)}</strong>
               <span className="text-on-surface-variant text-xs">Following</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <strong className="text-white font-semibold font-mono">{formatNumber(followCounts.followers)}</strong>
+            </button>
+            <button 
+              onClick={() => {
+                setFollowListTab('followers');
+                setIsFollowListOpen(true);
+              }}
+              className="flex items-center gap-1 hover:underline group"
+            >
+              <strong className="text-white font-semibold font-mono group-hover:text-primary transition-colors">{formatNumber(followCounts.followers)}</strong>
               <span className="text-on-surface-variant text-xs">Followers</span>
-            </div>
+            </button>
           </div>
         </div>
       </div>
@@ -177,6 +192,13 @@ export default function ProfilePage() {
       <EditProfileModal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
+      />
+
+      <FollowListModal
+        isOpen={isFollowListOpen}
+        onClose={() => setIsFollowListOpen(false)}
+        userId={user.id}
+        initialTab={followListTab}
       />
     </AppShell>
   );

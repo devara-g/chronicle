@@ -302,4 +302,46 @@ export const PostsService = {
       is_liked: false,
     };
   },
+
+  // Update a reply
+  async updateReply(replyId: string, newContent: string): Promise<boolean> {
+    if (!isSupabaseConfigured()) {
+      return true; // Mock success
+    }
+
+    try {
+      const { supabase } = await import('@/lib/supabase/client');
+      const { error } = await supabase
+        .from('replies')
+        .update({ content: newContent })
+        .eq('id', replyId);
+      
+      if (error) throw error;
+      return true;
+    } catch (e) {
+      console.error('Error updating reply:', e);
+      return false;
+    }
+  },
+
+  // Delete a reply
+  async deleteReply(replyId: string): Promise<boolean> {
+    if (!isSupabaseConfigured()) {
+      return true; // Mock success
+    }
+
+    try {
+      const { supabase } = await import('@/lib/supabase/client');
+      const { error } = await supabase
+        .from('replies')
+        .delete()
+        .eq('id', replyId);
+      
+      if (error) throw error;
+      return true;
+    } catch (e) {
+      console.error('Error deleting reply:', e);
+      return false;
+    }
+  },
 };

@@ -19,7 +19,7 @@ import {
 
 export default function NotificationsPage() {
   const { notifications, markNotificationsRead, markSingleNotificationRead } = useApp();
-  const [filter, setFilter] = useState<'all' | 'mentions' | 'likes' | 'messages'>('all');
+  const [filter, setFilter] = useState<'all' | 'mentions' | 'likes' | 'reposts' | 'messages'>('all');
 
   // Auto-mark all unread notifications as read when viewing this page
   useEffect(() => {
@@ -32,6 +32,7 @@ export default function NotificationsPage() {
   const filteredNotifs = notifications.filter((n) => {
     if (filter === 'mentions') return n.type === 'mention';
     if (filter === 'likes') return n.type === 'like';
+    if (filter === 'reposts') return n.type === 'repost';
     if (filter === 'messages') return n.type === 'message';
     return true;
   });
@@ -58,12 +59,12 @@ export default function NotificationsPage() {
         </div>
 
         {/* Filter Tabs */}
-        <div className="flex border-t border-white/[0.06]">
-          {(['all', 'mentions', 'likes', 'messages'] as const).map((tab) => (
+        <div className="flex border-t border-white/[0.06] overflow-x-auto scrollbar-hide">
+          {(['all', 'mentions', 'likes', 'reposts', 'messages'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setFilter(tab)}
-              className={`flex-1 py-3 text-center text-xs md:text-sm font-semibold capitalize transition-all relative ${
+              className={`min-w-fit px-4 py-3 text-center text-xs md:text-sm font-semibold capitalize transition-all relative whitespace-nowrap ${
                 filter === tab ? 'text-white' : 'text-on-surface-variant hover:text-white hover:bg-white/5'
               }`}
             >

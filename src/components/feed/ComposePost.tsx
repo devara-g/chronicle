@@ -17,7 +17,7 @@ interface ComposePostProps {
 export function ComposePost({ placeholder = "What's happening in the noir?", onSuccess, compact = false }: ComposePostProps) {
   const { user, createPost } = useApp();
   const [content, setContent] = useState('');
-  const [mediaUrl, setMediaUrl] = useState('');
+  const [mediaUrls, setMediaUrls] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [isEmojiOpen, setIsEmojiOpen] = useState(false);
@@ -41,30 +41,36 @@ export function ComposePost({ placeholder = "What's happening in the noir?", onS
     }
   };
 
-  const handleRemoveMedia = async () => {
-    const url = mediaUrl;
-    setMediaUrl('');
-    await deleteOrphanedMedia(url);
+  const handleRemoveMedia = async (index: number) => {
+    const urlToRemove = mediaUrls[index];
+    setMediaUrls(prev => prev.filter((_, i) => i !== index));
+    await deleteOrphanedMedia(urlToRemove);
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0 || !user) return;
+    
+    // Limit to remaining slots up to 4
+    const remainingSlots = 4 - mediaUrls.length;
+    const filesToUpload = files.slice(0, remainingSlots);
+    if (filesToUpload.length === 0) return;
 
-    const previousUrl = mediaUrl;
     setUploadingMedia(true);
     try {
       const { compressImageToWebp } = await import('@/lib/image-utils');
       const { StorageService } = await import('@/lib/services/storage.service');
 
-      const compressedFile = await compressImageToWebp(file, 1200);
-      const url = await StorageService.uploadMedia(compressedFile, user.id);
+      const uploadPromises = filesToUpload.map(async (file) => {
+        const compressedFile = await compressImageToWebp(file, 1200);
+        return StorageService.uploadMedia(compressedFile, user.id);
+      });
 
-      if (previousUrl) await deleteOrphanedMedia(previousUrl);
-      setMediaUrl(url);
+      const newUrls = await Promise.all(uploadPromises);
+      setMediaUrls(prev => [...prev, ...newUrls]);
     } catch (err) {
-      console.error('Failed to upload image', err);
-      alert('Failed to upload image.');
+      console.error('Failed to upload images', err);
+      alert('Failed to upload image(s).');
     } finally {
       setUploadingMedia(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -73,13 +79,21 @@ export function ComposePost({ placeholder = "What's happening in the noir?", onS
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!content.trim() && !mediaUrl.trim()) return;
+    if (!content.trim() && mediaUrls.length === 0) return;
 
     setLoading(true);
     try {
-      await createPost(content.trim(), mediaUrl.trim() || null);
+      // For backward compatibility, if 1 image, store as string. If >1, store as JSON string array.
+      let finalMediaUrl: string | null = null;
+      if (mediaUrls.length === 1) {
+        finalMediaUrl = mediaUrls[0];
+      } else if (mediaUrls.length > 1) {
+        finalMediaUrl = JSON.stringify(mediaUrls);
+      }
+
+      await createPost(content.trim(), finalMediaUrl);
       setContent('');
-      setMediaUrl('');
+      setMediaUrls([]);
       if (onSuccess) onSuccess();
     } catch (err) {
       console.error(err);
@@ -146,28 +160,41 @@ export function ComposePost({ placeholder = "What's happening in the noir?", onS
         </div>
 
         {/* Media Preview */}
-        {uploadingMedia ? (
+        {uploadingMedia && (
           <div className="mb-3 p-4 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center">
              <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
              <span className="ml-3 text-xs text-on-surface-variant font-mono">Compressing & Uploading...</span>
           </div>
-        ) : mediaUrl ? (
-          <div className="mb-3 relative rounded-xl overflow-hidden border border-white/10 group">
-            <Image src={mediaUrl} alt="Preview" width={600} height={400} className="w-full h-auto object-contain" />
-            <button
-              onClick={handleRemoveMedia}
-              className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black text-white rounded-full transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
+        )}
+        
+        {mediaUrls.length > 0 && (
+          <div className={`mb-3 grid gap-2 ${
+            mediaUrls.length === 1 ? 'grid-cols-1' :
+            mediaUrls.length === 2 ? 'grid-cols-2' :
+            mediaUrls.length === 3 ? 'grid-cols-2' : 'grid-cols-2'
+          }`}>
+            {mediaUrls.map((url, idx) => (
+              <div key={url} className={`relative rounded-xl overflow-hidden border border-white/10 group ${
+                mediaUrls.length === 3 && idx === 0 ? 'col-span-2 aspect-[2/1]' : 'aspect-square'
+              }`}>
+                <Image src={url} alt="Preview" fill className="object-cover" />
+                <button
+                  onClick={() => handleRemoveMedia(idx)}
+                  className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black text-white rounded-full transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
           </div>
-        ) : null}
+        )}
 
         <div className="flex justify-between items-center pt-3 border-t border-white/[0.06]">
           <div className="flex items-center gap-1 text-on-surface-variant">
             <input
               type="file"
               accept="image/*"
+              multiple
               ref={fileInputRef}
               onChange={handleFileSelect}
               className="hidden"
@@ -175,11 +202,11 @@ export function ComposePost({ placeholder = "What's happening in the noir?", onS
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              disabled={uploadingMedia}
+              disabled={uploadingMedia || mediaUrls.length >= 4}
               className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
-                mediaUrl ? 'bg-white/20 text-white' : 'hover:bg-white/10 hover:text-white'
-              } ${uploadingMedia ? 'opacity-50 cursor-wait' : ''}`}
-              title="Upload Image"
+                mediaUrls.length > 0 ? 'bg-white/20 text-white' : 'hover:bg-white/10 hover:text-white'
+              } ${uploadingMedia || mediaUrls.length >= 4 ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title="Upload Images (max 4)"
             >
               {uploadingMedia ? (
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -229,7 +256,7 @@ export function ComposePost({ placeholder = "What's happening in the noir?", onS
             <button
               type="button"
               onClick={() => handleSubmit()}
-              disabled={(!content.trim() && !mediaUrl.trim()) || loading || content.length > 280}
+              disabled={(!content.trim() && mediaUrls.length === 0) || loading || content.length > 280}
               className="bg-primary text-black font-headline font-bold py-1.5 px-5 rounded-full text-sm hover:bg-white/90 active:scale-95 transition-all disabled:opacity-40 disabled:pointer-events-none"
             >
               {loading ? 'Posting...' : 'Post'}
