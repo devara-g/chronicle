@@ -8,7 +8,7 @@ import { useApp } from '@/context/AppContext';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { PullToRefreshIndicator } from '@/components/ui/PullToRefreshIndicator';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2, RefreshCw } from 'lucide-react';
 
 export default function HomePage() {
   const {
@@ -22,6 +22,13 @@ export default function HomePage() {
     refreshPosts,
   } = useApp();
   const [tab, setTab] = useState<'for_you' | 'following'>('for_you');
+  const [isRefreshingManual, setIsRefreshingManual] = useState(false);
+
+  const handleManualRefresh = useCallback(async () => {
+    setIsRefreshingManual(true);
+    await refreshPosts();
+    setIsRefreshingManual(false);
+  }, [refreshPosts]);
 
   const displayedPosts =
     tab === 'for_you'
@@ -60,10 +67,12 @@ export default function HomePage() {
         <div className="flex justify-between items-center h-14 px-4">
           <h1 className="font-headline text-xl font-bold text-primary tracking-tight">Home</h1>
           <button
-            className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-on-surface-variant hover:text-white transition-colors"
-            title="Custom feed options"
+            onClick={handleManualRefresh}
+            disabled={isRefreshingManual || isRefreshing}
+            className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-on-surface-variant hover:text-white transition-colors disabled:opacity-50"
+            title="Refresh feed"
           >
-            <Sparkles className="w-4 h-4" />
+            <RefreshCw className={`w-4 h-4 ${isRefreshingManual ? 'animate-spin' : ''}`} />
           </button>
         </div>
 

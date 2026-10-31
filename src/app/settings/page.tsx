@@ -194,7 +194,7 @@ export default function SettingsPage() {
     setAccentColor(id);
     if (typeof window !== 'undefined') {
       localStorage.setItem('chronicle_accent', id);
-      document.documentElement.style.setProperty('--accent-color', hex);
+      document.documentElement.style.setProperty('--accent-hex', hex);
       document.documentElement.setAttribute('data-accent', id);
     }
     showNotification(`Accent color set to ${id.toUpperCase()}`);
@@ -205,6 +205,7 @@ export default function SettingsPage() {
     setGlassBlur(blur);
     if (typeof window !== 'undefined') {
       localStorage.setItem('chronicle_blur', blur);
+      document.documentElement.setAttribute('data-blur', blur);
     }
     showNotification(`Glass refraction level updated`);
   };

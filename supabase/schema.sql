@@ -82,7 +82,20 @@ CREATE TABLE IF NOT EXISTS public.notifications (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 10. Conversations & Direct Messages
+-- 11. User Notes Table (Instagram-style notes & music)
+CREATE TABLE IF NOT EXISTS public.user_notes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    text TEXT,
+    song_data JSONB,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    CONSTRAINT unique_user_note UNIQUE(user_id)
+);
+
+ALTER TABLE public.user_notes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public user_notes are viewable by everyone" ON public.user_notes FOR SELECT USING (true);
+CREATE POLICY "Users can insert/update their own note" ON public.user_notes FOR ALL USING (auth.uid() = user_id);
+
 CREATE TABLE IF NOT EXISTS public.conversations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     participant_one UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,

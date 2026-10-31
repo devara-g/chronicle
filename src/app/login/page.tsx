@@ -1,18 +1,48 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import Image from 'next/image';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
-import { Eye, EyeOff, Sparkles, ArrowRight, Infinity } from 'lucide-react';
+import { Eye, EyeOff, ArrowRight, UserCircle2, X } from 'lucide-react';
+import { type SavedAccount } from '@/components/layout/SidebarNav';
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const hintUsername = searchParams.get('hint');
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>([]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = JSON.parse(localStorage.getItem('chronicle_saved_accounts') || '[]');
+        setSavedAccounts(stored);
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
+
+  const handleSelectSavedAccount = (acc: SavedAccount) => {
+    setPassword('');
+  };
+
+  const handleRemoveSavedAccount = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    const updated = savedAccounts.filter((a) => a.id !== id);
+    setSavedAccounts(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('chronicle_saved_accounts', JSON.stringify(updated));
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,7 +69,6 @@ export default function LoginPage() {
       }
     }
 
-    // Success -> redirect to Home Feed
     router.push('/');
   };
 
@@ -48,12 +77,64 @@ export default function LoginPage() {
       <main className="w-full max-w-sm bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 sm:p-10 shadow-[0_20px_50px_rgba(0,0,0,0.8)] transition-all">
         {/* Brand Header */}
         <div className="text-center mb-8 space-y-2">
-          <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center mx-auto mb-3">
-            <Infinity className="w-7 h-7 text-white" />
+          <div className="w-14 h-14 rounded-2xl overflow-hidden border border-white/20 mx-auto mb-3 shadow-[0_0_25px_rgba(255,255,255,0.1)]">
+            <Image
+              src="/logo.jpg"
+              alt="Chronicle Logo"
+              width={56}
+              height={56}
+              className="w-full h-full object-cover"
+              priority
+            />
           </div>
           <h1 className="font-headline font-bold text-2xl md:text-3xl text-white tracking-tight">Chronicle</h1>
-          <p className="text-xs text-on-surface-variant font-mono">Sign in to your noir space</p>
+          <p className="text-xs text-on-surface-variant font-mono">
+            {hintUsername ? `Masuk kembali sebagai @${hintUsername}` : 'Sign in to your noir space'}
+          </p>
         </div>
+
+        {/* Quick Switch Saved Accounts List */}
+        {savedAccounts.length > 0 && (
+          <div className="mb-6 pb-4 border-b border-white/10">
+            <p className="text-[10px] font-mono text-on-surface-variant uppercase tracking-wider mb-2">
+              Akun Tersimpan
+            </p>
+            <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+              {savedAccounts.map((acc) => (
+                <div
+                  key={acc.id}
+                  onClick={() => handleSelectSavedAccount(acc)}
+                  className="flex items-center gap-2 p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-colors cursor-pointer group flex-shrink-0"
+                >
+                  {acc.avatar_url ? (
+                    <Image
+                      src={acc.avatar_url}
+                      alt={acc.full_name}
+                      width={28}
+                      height={28}
+                      className="w-7 h-7 rounded-full object-cover border border-white/20 flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
+                      <UserCircle2 className="w-4 h-4 text-white/50" />
+                    </div>
+                  )}
+                  <div className="text-left pr-1">
+                    <p className="text-xs font-semibold text-white leading-tight max-w-[90px] truncate">{acc.full_name}</p>
+                    <p className="text-[10px] text-on-surface-variant font-mono truncate">@{acc.username}</p>
+                  </div>
+                  <button
+                    onClick={(e) => handleRemoveSavedAccount(e, acc.id)}
+                    className="text-on-surface-variant hover:text-red-400 p-0.5 rounded transition-colors"
+                    title="Hapus dari daftar cepat"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Error Alert */}
         {errorMsg && (
@@ -167,5 +248,13 @@ export default function LoginPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-xs font-mono text-on-surface-variant">Loading...</div>}>
+      <LoginContent />
+    </Suspense>
   );
 }

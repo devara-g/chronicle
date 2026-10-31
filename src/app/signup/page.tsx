@@ -2,9 +2,10 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
-import { ArrowRight, Eye, EyeOff, MailCheck, Infinity, ArrowLeft } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, MailCheck, ArrowLeft } from 'lucide-react';
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -70,8 +71,15 @@ export default function SignUpPage() {
         {/* Brand Header */}
         <div className="text-center mb-6 space-y-2">
           <Link href="/" className="inline-flex items-center gap-2.5 group">
-            <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center group-hover:scale-105 transition-transform">
-              <Infinity className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 rounded-xl overflow-hidden border border-white/20 group-hover:scale-105 transition-transform flex-shrink-0">
+              <Image
+                src="/logo.jpg"
+                alt="Chronicle Logo"
+                width={40}
+                height={40}
+                className="w-full h-full object-cover"
+                priority
+              />
             </div>
             <h1 className="font-headline font-bold text-2xl text-white tracking-tight">Chronicle</h1>
           </Link>

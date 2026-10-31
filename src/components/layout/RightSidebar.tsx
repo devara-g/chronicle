@@ -32,16 +32,18 @@ export function RightSidebar() {
           setRecommendedUsers(filtered);
         }
 
-        // Fetch Trending Topics (extract from recent posts)
+        // Fetch Trending Topics (extract from recent posts — count each tag once per post)
         const { data: posts } = await supabase.from('posts').select('content').order('created_at', { ascending: false }).limit(50);
         if (posts) {
           const tags: Record<string, number> = {};
           posts.forEach((p: any) => {
             const words: string[] = p.content.split(/\s+/);
-            words.forEach((w: string) => {
-              if (w.startsWith('#') && w.length > 1) {
-                tags[w] = (tags[w] || 0) + 1;
-              }
+            // deduplicate tags within each post (Set)
+            const uniqueTagsInPost = new Set(
+              words.filter((w: string) => w.startsWith('#') && w.length > 1).map((w: string) => w.toLowerCase())
+            );
+            uniqueTagsInPost.forEach((tag) => {
+              tags[tag] = (tags[tag] || 0) + 1;
             });
           });
           const sorted = Object.entries(tags).sort((a,b) => b[1] - a[1]).slice(0,4);

@@ -13,6 +13,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { EmojiPicker } from '@/components/ui/EmojiPicker';
 import { AudioMessagePlayer } from '@/components/chat/AudioMessagePlayer';
 import { ImageLightboxModal } from '@/components/ui/ImageLightboxModal';
+import { DirectNotesBar } from '@/components/chat/DirectNotesBar';
 import { 
   Send, 
   ArrowLeft, 
@@ -600,6 +601,9 @@ function MessagesContent() {
               )}
             </div>
           </div>
+
+          {/* Instagram-style Direct Notes & Music Bar */}
+          <DirectNotesBar />
 
           {/* Conversation List */}
           <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-white/5 p-2 space-y-1">
