@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
-import { Phone, PhoneOff, Mic, MicOff, Volume2 } from 'lucide-react';
+import { Phone, PhoneOff, Mic, MicOff } from 'lucide-react';
 import { useVoiceCall } from '@/context/VoiceCallContext';
 
 function formatDuration(seconds: number): string {
@@ -32,75 +32,21 @@ export function VoiceCallModal() {
 
   if (!mounted || callStatus === 'idle' || !remoteUser) return null;
 
-  const modalContent = (
-    <div className="fixed inset-0 z-[99999] bg-black/90 backdrop-blur-2xl flex items-center justify-center p-4 animate-fade-in select-none">
-      {/* Background ambient neon glow based on status */}
+  const toastBanner = (
+    <div className="fixed top-3 sm:top-5 inset-x-0 z-[99999] pointer-events-none flex justify-center px-3 sm:px-4 select-none animate-fadeIn">
+      {/* Dynamic Floating Toast Card (Noir Glass) */}
       <div
-        className={`absolute w-72 h-72 rounded-full blur-[120px] pointer-events-none opacity-25 transition-all duration-700 ${
+        className={`pointer-events-auto w-full max-w-lg bg-[#0c0c0c]/95 backdrop-blur-2xl border rounded-2xl p-3 sm:px-4 sm:py-3 shadow-[0_20px_50px_rgba(0,0,0,0.85)] flex items-center justify-between gap-3 sm:gap-4 transition-all duration-300 ${
           callStatus === 'incoming'
-            ? 'bg-emerald-500 scale-125 animate-pulse'
+            ? 'border-emerald-500/50 shadow-[0_12px_40px_rgba(16,185,129,0.3)] ring-1 ring-emerald-500/30'
             : callStatus === 'connected'
-            ? 'bg-sky-500 scale-110'
-            : 'bg-white scale-100'
+            ? 'border-white/20 shadow-[0_12px_40px_rgba(255,255,255,0.08)]'
+            : 'border-sky-500/40 shadow-[0_12px_40px_rgba(56,189,248,0.25)]'
         }`}
-      />
-
-      {/* Main Glass Card */}
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-sm bg-[#121212]/90 border border-white/20 rounded-[32px] p-8 shadow-[0_30px_90px_rgba(0,0,0,0.95)] flex flex-col items-center text-center relative z-10 space-y-6"
       >
-        {/* Status Chip */}
-        <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-mono">
-          {callStatus === 'calling' && (
-            <>
-              <span className="w-2 h-2 rounded-full bg-sky-400 animate-ping" />
-              <span className="text-white/80">Memanggil...</span>
-            </>
-          )}
-          {callStatus === 'incoming' && (
-            <>
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-              <span className="text-emerald-400 font-semibold">Panggilan Masuk</span>
-            </>
-          )}
-          {callStatus === 'connected' && (
-            <>
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              <span className="text-white font-mono">{formatDuration(callDuration)}</span>
-            </>
-          )}
-        </div>
-
-        {/* Avatar with Pulsing Radar Rings */}
-        <div className="relative my-2 flex items-center justify-center">
-          {/* Radar ripple rings */}
-          {callStatus !== 'connected' && (
-            <>
-              <div
-                className={`absolute w-36 h-36 rounded-full border-2 animate-ping pointer-events-none opacity-20 ${
-                  callStatus === 'incoming' ? 'border-emerald-400' : 'border-sky-400'
-                }`}
-                style={{ animationDuration: '2s' }}
-              />
-              <div
-                className={`absolute w-44 h-44 rounded-full border pointer-events-none opacity-10 animate-pulse ${
-                  callStatus === 'incoming' ? 'border-emerald-400' : 'border-sky-400'
-                }`}
-              />
-            </>
-          )}
-
-          {/* Central Avatar */}
-          <div
-            className={`relative w-28 h-28 rounded-full overflow-hidden border-4 shadow-2xl transition-all duration-300 flex items-center justify-center bg-[#1e293b] ${
-              callStatus === 'incoming'
-                ? 'border-emerald-400/80 shadow-[0_0_30px_rgba(52,211,153,0.4)] scale-105'
-                : callStatus === 'connected'
-                ? 'border-white/30 shadow-[0_0_30px_rgba(255,255,255,0.15)]'
-                : 'border-white/20'
-            }`}
-          >
+        {/* Left: Avatar with Status Indicator */}
+        <div className="relative flex-shrink-0">
+          <div className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-full overflow-hidden border-2 border-white/20 bg-[#1e293b]">
             {remoteUser.avatarUrl ? (
               <Image
                 src={remoteUser.avatarUrl}
@@ -110,96 +56,139 @@ export function VoiceCallModal() {
                 priority
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-emerald-950 via-[#064e3b] to-teal-800 text-white font-bold text-3xl font-headline select-none">
+              <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-emerald-950 via-[#064e3b] to-teal-800 text-white font-bold text-base sm:text-lg font-headline">
                 {remoteUser.fullName?.charAt(0).toUpperCase() || 'U'}
+              </div>
+            )}
+          </div>
+
+          {/* Mini Status Dot */}
+          <span
+            className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-[#0c0c0c] ${
+              callStatus === 'incoming'
+                ? 'bg-emerald-400 animate-ping'
+                : callStatus === 'connected'
+                ? 'bg-emerald-500'
+                : 'bg-sky-400 animate-pulse'
+            }`}
+          />
+        </div>
+
+        {/* Center: Remote User Info & Call Status */}
+        <div className="flex-1 min-w-0 flex flex-col justify-center">
+          <div className="flex items-center gap-1.5">
+            <h4 className="font-semibold text-sm sm:text-base text-white truncate leading-tight">
+              {remoteUser.fullName}
+            </h4>
+            <span className="text-xs text-white/40 font-mono truncate hidden sm:inline">
+              @{remoteUser.username}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 mt-0.5">
+            {callStatus === 'calling' && (
+              <div className="flex items-center gap-1.5 text-xs text-sky-400 font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-ping" />
+                <span>Memanggil...</span>
+              </div>
+            )}
+            {callStatus === 'incoming' && (
+              <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-semibold font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                <span>Panggilan Masuk</span>
+              </div>
+            )}
+            {callStatus === 'connected' && (
+              <div className="flex items-center gap-2 text-xs text-white/90 font-mono">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                  <span className="font-semibold">{formatDuration(callDuration)}</span>
+                </div>
+                <div className="flex items-center gap-0.5 h-3">
+                  <span className="w-0.5 bg-emerald-400 rounded-full animate-pulse h-2" />
+                  <span
+                    className="w-0.5 bg-emerald-400 rounded-full animate-bounce h-3"
+                    style={{ animationDelay: '0.15s' }}
+                  />
+                  <span
+                    className="w-0.5 bg-emerald-400 rounded-full animate-pulse h-2.5"
+                    style={{ animationDelay: '0.3s' }}
+                  />
+                  <span
+                    className="w-0.5 bg-emerald-400 rounded-full animate-bounce h-3.5"
+                    style={{ animationDelay: '0.45s' }}
+                  />
+                </div>
               </div>
             )}
           </div>
         </div>
 
-        {/* User Info */}
-        <div className="space-y-1">
-          <h3 className="font-headline font-bold text-xl text-white tracking-tight">
-            {remoteUser.fullName}
-          </h3>
-          <p className="text-xs text-on-surface-variant font-mono">@{remoteUser.username}</p>
-        </div>
-
-        {/* Connected Audio Soundwave Visualizer */}
-        {callStatus === 'connected' && (
-          <div className="flex items-center justify-center gap-1.5 h-8 py-1">
-            <span className="w-1 bg-sky-400 rounded-full animate-pulse h-3" />
-            <span className="w-1 bg-sky-400 rounded-full animate-bounce h-6" style={{ animationDelay: '0.15s' }} />
-            <span className="w-1 bg-sky-400 rounded-full animate-pulse h-4" style={{ animationDelay: '0.3s' }} />
-            <span className="w-1 bg-sky-400 rounded-full animate-bounce h-7" style={{ animationDelay: '0.45s' }} />
-            <span className="w-1 bg-sky-400 rounded-full animate-pulse h-3" style={{ animationDelay: '0.2s' }} />
-          </div>
-        )}
-
-        {/* Action Controls */}
-        <div className="pt-2 w-full flex items-center justify-center gap-6">
+        {/* Right: Quick Action Controls */}
+        <div className="flex items-center gap-2 flex-shrink-0">
           {callStatus === 'incoming' ? (
             /* Incoming Actions: Reject (Red) vs Accept (Green) */
             <>
               <button
                 type="button"
                 onClick={rejectCall}
-                className="w-16 h-16 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center shadow-[0_0_25px_rgba(239,68,68,0.5)] transition-all active:scale-90"
+                className="w-10 h-10 rounded-full bg-red-500/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 flex items-center justify-center transition active:scale-90"
                 title="Tolak Panggilan"
               >
-                <PhoneOff className="w-7 h-7 stroke-[2.2]" />
+                <PhoneOff className="w-4 h-4 stroke-[2.2]" />
               </button>
 
               <button
                 type="button"
                 onClick={acceptCall}
-                className="w-16 h-16 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black flex items-center justify-center shadow-[0_0_30px_rgba(52,211,153,0.6)] transition-all active:scale-90 animate-bounce"
+                className="px-3.5 h-10 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs flex items-center gap-1.5 shadow-[0_0_20px_rgba(52,211,153,0.5)] transition active:scale-95 animate-pulse"
                 title="Terima Panggilan"
               >
-                <Phone className="w-7 h-7 stroke-[2.4]" />
+                <Phone className="w-4 h-4 stroke-[2.5]" />
+                <span className="hidden sm:inline">Terima</span>
               </button>
             </>
           ) : callStatus === 'calling' ? (
-            /* Outgoing Calling Action: Cancel */
+            /* Outgoing Action: Cancel Call */
             <button
               type="button"
               onClick={endCall}
-              className="w-16 h-16 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center shadow-[0_0_25px_rgba(239,68,68,0.5)] transition-all active:scale-90"
+              className="px-3.5 h-10 rounded-full bg-red-600/90 hover:bg-red-500 text-white font-medium text-xs flex items-center gap-1.5 shadow-[0_0_15px_rgba(239,68,68,0.4)] transition active:scale-95"
               title="Batalkan Panggilan"
             >
-              <PhoneOff className="w-7 h-7 stroke-[2.2]" />
+              <PhoneOff className="w-4 h-4 stroke-[2.2]" />
+              <span className="hidden sm:inline">Batalkan</span>
             </button>
           ) : (
-            /* Connected Actions: Mute Toggle + End Call */
-            <div className="flex items-center gap-5">
+            /* Connected Actions: Toggle Mute + End Call */
+            <>
               <button
                 type="button"
                 onClick={toggleMute}
-                className={`w-14 h-14 rounded-full flex items-center justify-center border transition-all active:scale-90 ${
+                className={`w-10 h-10 rounded-full flex items-center justify-center border transition active:scale-95 ${
                   isMuted
-                    ? 'bg-amber-500/20 border-amber-500/40 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.25)]'
+                    ? 'bg-amber-500/20 border-amber-500/40 text-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.25)]'
                     : 'bg-white/10 border-white/20 text-white hover:bg-white/15'
                 }`}
                 title={isMuted ? 'Nyalakan Mikrofon' : 'Bisukan Mikrofon'}
               >
-                {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+                {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
               </button>
 
               <button
                 type="button"
                 onClick={endCall}
-                className="w-16 h-16 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center shadow-[0_0_30px_rgba(239,68,68,0.55)] transition-all active:scale-90"
+                className="w-10 h-10 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center shadow-[0_0_15px_rgba(239,68,68,0.4)] transition active:scale-95"
                 title="Akhiri Panggilan"
               >
-                <PhoneOff className="w-7 h-7 stroke-[2.4]" />
+                <PhoneOff className="w-4 h-4 stroke-[2.2]" />
               </button>
-            </div>
+            </>
           )}
         </div>
       </div>
     </div>
   );
 
-  return createPortal(modalContent, document.body);
+  return createPortal(toastBanner, document.body);
 }
-
