@@ -18,8 +18,10 @@ import {
   SlidersHorizontal,
   Send,
   Trash2,
-  Sparkles
+  Sparkles,
+  Users
 } from 'lucide-react';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { NotesService } from '@/lib/services/notes.service';
 import { MessagesService } from '@/lib/services/messages.service';
 import { formatTimeAgo } from '@/lib/utils';
@@ -49,7 +51,7 @@ export interface UserNote {
 
 
 export function DirectNotesBar() {
-  const { user } = useApp();
+  const { user, friendIds } = useApp();
   const [myNote, setMyNote] = useState<UserNote | null>(null);
   const [friendsNotes, setFriendsNotes] = useState<UserNote[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -61,14 +63,48 @@ export function DirectNotesBar() {
 
   const loadNotes = async () => {
     if (!user) return;
-    const { myNote: mine, friendsNotes: friends } = await NotesService.getNotes(user.id);
+    const { myNote: mine, friendsNotes: friends } = await NotesService.getNotes(user.id, friendIds);
     setMyNote(mine);
     setFriendsNotes(friends);
   };
 
   useEffect(() => {
     loadNotes();
-  }, [user]);
+  }, [user, friendIds]);
+
+  // Real-time synchronization across tabs & Supabase broadcasts
+  useEffect(() => {
+    const handleSync = () => {
+      loadNotes();
+    };
+
+    window.addEventListener('storage', handleSync);
+    window.addEventListener('focus', handleSync);
+    window.addEventListener('chronicle_note_updated', handleSync);
+
+    // Polling halus setiap 3.5 detik agar perubahan catatan teman langsung muncul
+    const pollInterval = setInterval(handleSync, 3500);
+
+    // Supabase Realtime broadcast
+    let channel: any = null;
+    if (isSupabaseConfigured()) {
+      channel = supabase
+        .channel('global_notes_feed')
+        .on('broadcast', { event: 'new_note' }, handleSync)
+        .on('broadcast', { event: 'delete_note' }, handleSync)
+        .subscribe();
+    }
+
+    return () => {
+      window.removeEventListener('storage', handleSync);
+      window.removeEventListener('focus', handleSync);
+      window.removeEventListener('chronicle_note_updated', handleSync);
+      clearInterval(pollInterval);
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [user, friendIds]);
 
   const handlePlaySong = (e: React.MouseEvent, song?: NoteSong | null) => {
     e.stopPropagation();
@@ -303,6 +339,26 @@ export function DirectNotesBar() {
               </div>
             );
           })}
+
+          {/* Indikator Status Teman jika belum ada catatan teman */}
+          {friendsNotes.length === 0 && (
+            <div className="flex items-center gap-2.5 px-3 py-2 rounded-2xl bg-white/[0.03] border border-dashed border-white/10 shrink-0 self-center my-auto ml-1 text-on-surface-variant max-w-[215px] animate-fade-in">
+              <Users className="w-4 h-4 text-emerald-400 shrink-0" />
+              <div className="text-[10px] leading-tight font-mono">
+                {friendIds.length > 0 ? (
+                  <>
+                    <p className="text-white/80 font-medium">Belum ada catatan</p>
+                    <p className="text-white/40 text-[9px]">{friendIds.length} teman belum berbagi catatan</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-white/80 font-medium">Hanya Teman</p>
+                    <p className="text-white/40 text-[9px]">Saling follow untuk melihat catatan</p>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -600,6 +656,11 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
               height={64}
               className="w-full h-full object-cover"
             />
+          </div>
+
+          <div className="flex items-center gap-1.5 text-[10px] font-mono text-white/60 mt-2 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Dibagikan ke: <strong className="text-emerald-400">Teman</strong> (saling follow)</span>
           </div>
         </div>
 
@@ -986,7 +1047,13 @@ function RevealNoteModal({ note, isMe, onClose, onEdit, onDelete }: RevealNoteMo
             />
           </div>
           <div className="min-w-0 flex-1">
-            <h4 className="font-bold text-white text-base truncate">{note.fullName}</h4>
+            <div className="flex items-center gap-2">
+              <h4 className="font-bold text-white text-base truncate">{note.fullName}</h4>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] font-mono flex items-center gap-1 shrink-0">
+                <Users className="w-2.5 h-2.5" />
+                <span>Teman</span>
+              </span>
+            </div>
             <p className="text-xs text-on-surface-variant font-mono">@{note.username}</p>
             <p className="text-[10px] text-white/40 font-mono mt-0.5">{formatTimeAgo(new Date(note.createdAt).toISOString())}</p>
           </div>

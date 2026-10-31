@@ -5,8 +5,11 @@ import { NoteSong, UserNote } from '@/components/chat/DirectNotesBar';
 const LOCAL_STORAGE_NOTES_KEY = 'chronicle_shared_notes';
 
 export const NotesService = {
-  // Ambil semua notes real
-  async getNotes(currentUserId?: string): Promise<{ myNote: UserNote | null; friendsNotes: UserNote[] }> {
+  // Ambil semua notes real dengan filter status Teman (mutualan / saling follow)
+  async getNotes(
+    currentUserId?: string,
+    friendIds: string[] = []
+  ): Promise<{ myNote: UserNote | null; friendsNotes: UserNote[] }> {
     let allNotes: Record<string, UserNote> = {};
 
     // 1. Ambil dari localStorage cache/shared pool
@@ -57,9 +60,11 @@ export const NotesService = {
     );
 
     const myNote = currentUserId ? activeNotes.find((n) => n.userId === currentUserId) || null : null;
+    
+    // Fitur Teman: Hanya akun yang saling follow (mutualan) yang dapat melihat catatan teman
     const friendsNotes = currentUserId
-      ? activeNotes.filter((n) => n.userId !== currentUserId)
-      : activeNotes;
+      ? activeNotes.filter((n) => n.userId !== currentUserId && friendIds.includes(n.userId))
+      : [];
 
     return { myNote, friendsNotes };
   },
@@ -88,6 +93,7 @@ export const NotesService = {
         const pool: Record<string, UserNote> = raw ? JSON.parse(raw) : {};
         pool[user.id] = newNote;
         localStorage.setItem(LOCAL_STORAGE_NOTES_KEY, JSON.stringify(pool));
+        window.dispatchEvent(new Event('chronicle_note_updated'));
       } catch (e) {
         console.warn('LocalStorage error:', e);
       }
@@ -127,6 +133,7 @@ export const NotesService = {
           const pool: Record<string, UserNote> = JSON.parse(raw);
           delete pool[userId];
           localStorage.setItem(LOCAL_STORAGE_NOTES_KEY, JSON.stringify(pool));
+          window.dispatchEvent(new Event('chronicle_note_updated'));
         }
       } catch {
         // ignore

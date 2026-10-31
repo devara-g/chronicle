@@ -15,6 +15,10 @@ interface AppContextType {
   notifications: Notification[];
   conversations: Conversation[];
   followingIds: string[];
+  followerIds: string[];
+  friendIds: string[];
+  isFriend: (userId: string) => boolean;
+  isFollower: (userId: string) => boolean;
   unreadNotifsCount: number;
   unreadMessagesCount: number;
   isComposeOpen: boolean;
@@ -56,6 +60,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [followingIds, setFollowingIds] = useState<string[]>([]);
+  const [followerIds, setFollowerIds] = useState<string[]>([]);
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -70,10 +75,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const loadedProfile = await AuthService.getCurrentProfile();
         setUser(loadedProfile);
 
-        const [{ posts: loadedPosts, hasMore }, followsData, notifData, loadedConvs] = await Promise.all([
+        const [{ posts: loadedPosts, hasMore }, followsData, followersData, notifData, loadedConvs] = await Promise.all([
           PostsService.getPosts(loadedProfile?.id, 0),
           loadedProfile && isSupabaseConfigured()
             ? supabase.from('follows').select('following_id').eq('follower_id', loadedProfile.id)
+            : Promise.resolve({ data: null }),
+          loadedProfile && isSupabaseConfigured()
+            ? supabase.from('follows').select('follower_id').eq('following_id', loadedProfile.id)
             : Promise.resolve({ data: null }),
           loadedProfile ? NotificationsService.getNotifications(loadedProfile.id) : Promise.resolve([]),
           loadedProfile ? MessagesService.getConversations(loadedProfile.id) : Promise.resolve([]),
@@ -83,9 +91,46 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setHasMorePosts(hasMore);
         currentPageRef.current = 0;
         setConversations(loadedConvs);
+
+        let initialFollowings: string[] = [];
+        let initialFollowers: string[] = [];
+
         if (followsData.data) {
-          setFollowingIds(followsData.data.map((f: any) => f.following_id));
+          initialFollowings = followsData.data.map((f: any) => f.following_id);
         }
+        if (followersData?.data) {
+          initialFollowers = followersData.data.map((f: any) => f.follower_id);
+        }
+
+        // Sync with local follows pool (membuat multi-akun & offline selalu konsisten)
+        if (typeof window !== 'undefined' && loadedProfile) {
+          try {
+            const rawPool = localStorage.getItem('chronicle_follows_pool');
+            const pool: Record<string, string[]> = rawPool ? JSON.parse(rawPool) : {};
+
+            if (pool[loadedProfile.id]) {
+              initialFollowings = Array.from(new Set([...initialFollowings, ...pool[loadedProfile.id]]));
+            } else if (initialFollowings.length > 0) {
+              pool[loadedProfile.id] = initialFollowings;
+            }
+
+            // Hitung followers dari pool akun lain yang mengikuti user ini
+            Object.entries(pool).forEach(([otherId, followingList]) => {
+              if (otherId !== loadedProfile.id && followingList.includes(loadedProfile.id)) {
+                if (!initialFollowers.includes(otherId)) {
+                  initialFollowers.push(otherId);
+                }
+              }
+            });
+
+            localStorage.setItem('chronicle_follows_pool', JSON.stringify(pool));
+          } catch (e) {
+            console.warn('Follows pool sync error:', e);
+          }
+        }
+
+        setFollowingIds(initialFollowings);
+        setFollowerIds(initialFollowers);
         setNotifications(notifData);
       } catch (err) {
         console.error('Failed loading app data:', err);
@@ -94,6 +139,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     }
     loadData();
+
+    if (isSupabaseConfigured()) {
+      const { data: authSub } = supabase.auth.onAuthStateChange((event) => {
+        if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
+          loadData();
+        }
+      });
+      return () => {
+        authSub.subscription.unsubscribe();
+      };
+    }
   }, []);
 
   // Supabase Realtime WebSocket Subscription for Posts & Notifications
@@ -415,14 +471,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user, posts]);
 
+  const friendIds = useMemo(() => {
+    return followingIds.filter((id) => followerIds.includes(id));
+  }, [followingIds, followerIds]);
+
+  const isFriend = useCallback((userId: string) => {
+    return friendIds.includes(userId);
+  }, [friendIds]);
+
+  const isFollower = useCallback((userId: string) => {
+    return followerIds.includes(userId);
+  }, [followerIds]);
+
   const toggleFollow = useCallback(async (userId: string) => {
     if (!user) return;
     const isFollowing = followingIds.includes(userId);
 
     // Optimistic UI update
-    setFollowingIds(prev =>
-      isFollowing ? prev.filter(id => id !== userId) : [...prev, userId]
-    );
+    const updatedFollowings = isFollowing
+      ? followingIds.filter(id => id !== userId)
+      : [...followingIds, userId];
+
+    setFollowingIds(updatedFollowings);
+
+    // Update local follows pool
+    if (typeof window !== 'undefined') {
+      try {
+        const rawPool = localStorage.getItem('chronicle_follows_pool');
+        const pool: Record<string, string[]> = rawPool ? JSON.parse(rawPool) : {};
+        pool[user.id] = updatedFollowings;
+        localStorage.setItem('chronicle_follows_pool', JSON.stringify(pool));
+      } catch (e) {
+        console.warn('LocalStorage follow pool error:', e);
+      }
+    }
 
     if (isSupabaseConfigured()) {
       try {
@@ -561,6 +643,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     notifications,
     conversations,
     followingIds,
+    followerIds,
+    friendIds,
+    isFriend,
+    isFollower,
     unreadNotifsCount,
     unreadMessagesCount,
     isComposeOpen,
@@ -597,6 +683,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     notifications,
     conversations,
     followingIds,
+    followerIds,
+    friendIds,
+    isFriend,
+    isFollower,
     unreadNotifsCount,
     unreadMessagesCount,
     isComposeOpen,

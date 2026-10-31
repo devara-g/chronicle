@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Loader2 } from 'lucide-react';
+import { X, Loader2, Users } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Profile } from '@/types';
@@ -16,7 +16,7 @@ interface FollowListModalProps {
 }
 
 export function FollowListModal({ isOpen, onClose, userId, initialTab }: FollowListModalProps) {
-  const { followingIds, toggleFollow, user: currentUser } = useApp();
+  const { followingIds, toggleFollow, user: currentUser, isFriend, isFollower } = useApp();
   const [activeTab, setActiveTab] = useState<'followers' | 'following'>(initialTab);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -141,14 +141,27 @@ export function FollowListModal({ isOpen, onClose, userId, initialTab }: FollowL
                         className="w-11 h-11 rounded-full object-cover border border-white/10 flex-shrink-0"
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5">
                           <p className="text-white font-semibold text-sm leading-tight truncate">
                             {profile.full_name}
                           </p>
+                          {isFriend(profile.id) && (
+                            <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[9px] font-mono flex items-center gap-0.5 shrink-0">
+                              <Users className="w-2.5 h-2.5" />
+                              <span>Teman</span>
+                            </span>
+                          )}
                         </div>
-                        <p className="text-on-surface-variant text-xs font-mono truncate">
-                          @{profile.username}
-                        </p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <p className="text-on-surface-variant text-xs font-mono truncate">
+                            @{profile.username}
+                          </p>
+                          {isFollower(profile.id) && !isFriend(profile.id) && (
+                            <span className="text-[9px] font-mono text-white/50 bg-white/5 px-1 rounded">
+                              Mengikuti Anda
+                            </span>
+                          )}
+                        </div>
                         {profile.bio && (
                           <p className="text-white/80 text-xs mt-1 truncate font-body">
                             {profile.bio}
@@ -167,10 +180,12 @@ export function FollowListModal({ isOpen, onClose, userId, initialTab }: FollowL
                         className={`ml-3 px-4 py-1.5 rounded-full text-xs font-semibold font-headline transition-all ${
                           isFollowing
                             ? 'bg-transparent border border-white/30 text-white hover:border-red-500/50 hover:text-red-400 hover:bg-red-500/10'
+                            : isFollower(profile.id)
+                            ? 'bg-emerald-400 text-black hover:bg-emerald-300 font-bold shadow-[0_0_12px_rgba(52,211,153,0.3)]'
                             : 'bg-white text-black hover:bg-white/90'
                         }`}
                       >
-                        {isFollowing ? 'Following' : 'Follow'}
+                        {isFollowing ? 'Following' : isFollower(profile.id) ? 'Follow Back' : 'Follow'}
                       </button>
                     )}
                   </div>

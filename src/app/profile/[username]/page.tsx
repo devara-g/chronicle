@@ -7,7 +7,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { useApp } from '@/context/AppContext';
 import { PostCard } from '@/components/feed/PostCard';
 import { formatNumber } from '@/lib/utils';
-import { ArrowLeft, Calendar, Link as LinkIcon, Mail } from 'lucide-react';
+import { ArrowLeft, Calendar, Link as LinkIcon, Mail, Users, UserPlus } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { Profile, Post } from '@/types';
 
@@ -15,7 +15,7 @@ export default function UserProfilePage() {
   const params = useParams();
   const router = useRouter();
   const username = params.username as string;
-  const { posts, followingIds, toggleFollow } = useApp();
+  const { user: currentUser, posts, followingIds, toggleFollow, isFriend, isFollower } = useApp();
   const [activeTab, setActiveTab] = useState<'posts' | 'replies' | 'media' | 'likes'>('posts');
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -118,30 +118,72 @@ export default function UserProfilePage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => router.push(`/messages?user=${profile.id}`)}
-              className="p-2 rounded-full border border-white/20 bg-white/5 hover:bg-white/10 text-white transition-all active:scale-95"
-              title={`Message ${profile.full_name}`}
-            >
-              <Mail className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => toggleFollow(profile.id)}
-              className={`px-6 py-2 rounded-full font-headline font-bold text-sm transition-all active:scale-95 ${
-                isFollowing
-                  ? 'bg-white/10 border border-white/20 text-white hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30'
-                  : 'bg-primary text-black hover:bg-white/90'
-              }`}
-            >
-              {isFollowing ? 'Following' : 'Follow'}
-            </button>
+            {currentUser?.id !== profile.id && (
+              <>
+                <button
+                  onClick={() => router.push(`/messages?user=${profile.id}`)}
+                  className="p-2.5 rounded-full border border-white/20 bg-white/5 hover:bg-white/10 text-white transition-all active:scale-95"
+                  title={`Message ${profile.full_name}`}
+                >
+                  <Mail className="w-4 h-4" />
+                </button>
+
+                {/* Status Teman (Mutualan / Saling Follow) */}
+                {isFriend(profile.id) && (
+                  <div className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-mono text-xs font-semibold shadow-[0_0_15px_rgba(16,185,129,0.15)]">
+                    <Users className="w-3.5 h-3.5" />
+                    <span>Teman</span>
+                  </div>
+                )}
+
+                {/* Follow Button with Follow Back logic */}
+                {isFollowing ? (
+                  <button
+                    onClick={() => toggleFollow(profile.id)}
+                    className="px-5 py-2 rounded-full font-headline font-semibold text-xs border border-white/20 bg-white/5 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 text-white/80 transition-all active:scale-95"
+                  >
+                    Mengikuti
+                  </button>
+                ) : isFollower(profile.id) ? (
+                  <button
+                    onClick={() => toggleFollow(profile.id)}
+                    className="px-5 py-2 rounded-full font-headline font-bold text-xs bg-emerald-400 text-black hover:bg-emerald-300 transition-all active:scale-95 shadow-[0_0_20px_rgba(52,211,153,0.35)] flex items-center gap-1.5"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>Follow Back</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => toggleFollow(profile.id)}
+                    className="px-6 py-2 rounded-full font-headline font-bold text-xs bg-primary text-black hover:bg-white/90 transition-all active:scale-95"
+                  >
+                    Follow
+                  </button>
+                )}
+              </>
+            )}
           </div>
         </div>
 
         <div className="space-y-3">
           <div>
-            <h2 className="font-headline font-bold text-xl md:text-2xl text-white tracking-tight">{profile.full_name}</h2>
-            <p className="text-on-surface-variant text-sm font-mono">@{profile.username}</p>
+            <div className="flex items-center gap-2">
+              <h2 className="font-headline font-bold text-xl md:text-2xl text-white tracking-tight">{profile.full_name}</h2>
+              {isFriend(profile.id) && (
+                <span className="md:hidden px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] font-mono flex items-center gap-1">
+                  <Users className="w-2.5 h-2.5" />
+                  <span>Teman</span>
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 mt-0.5">
+              <p className="text-on-surface-variant text-sm font-mono">@{profile.username}</p>
+              {isFollower(profile.id) && (
+                <span className="text-[10px] font-mono bg-white/10 text-white/70 px-2 py-0.5 rounded">
+                  Mengikuti Anda
+                </span>
+              )}
+            </div>
           </div>
 
           {profile.bio && (
