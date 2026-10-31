@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AppProvider } from "@/context/AppContext";
+import { VoiceCallProvider } from "@/context/VoiceCallContext";
 import { ComposeModal } from "@/components/feed";
+import { VoiceCallModal } from "@/components/chat/VoiceCallModal";
 
 export const metadata: Metadata = {
   title: "Chronicle — Digital Noir Microblog",
@@ -27,8 +29,11 @@ export default function RootLayout({
         className="antialiased bg-black text-on-surface min-h-screen selection:bg-white/20"
       >
         <AppProvider>
-          {children}
-          <ComposeModal />
+          <VoiceCallProvider>
+            {children}
+            <ComposeModal />
+            <VoiceCallModal />
+          </VoiceCallProvider>
         </AppProvider>
       </body>
     </html>

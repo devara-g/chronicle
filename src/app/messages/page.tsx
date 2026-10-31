@@ -14,6 +14,7 @@ import { EmojiPicker } from '@/components/ui/EmojiPicker';
 import { AudioMessagePlayer } from '@/components/chat/AudioMessagePlayer';
 import { ImageLightboxModal } from '@/components/ui/ImageLightboxModal';
 import { DirectNotesBar } from '@/components/chat/DirectNotesBar';
+import { useVoiceCall } from '@/context/VoiceCallContext';
 import { 
   Send, 
   ArrowLeft, 
@@ -31,7 +32,8 @@ import {
   Edit2,
   Copy,
   Check,
-  Loader2
+  Loader2,
+  Phone
 } from 'lucide-react';
 
 function MessagesContent() {
@@ -40,6 +42,7 @@ function MessagesContent() {
   const targetUserId = searchParams.get('user');
 
   const { conversations, user, refreshConversations, markConversationAsRead } = useApp();
+  const { startCall } = useVoiceCall();
   const [selectedConvId, setSelectedConvId] = useState<string>('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -734,13 +737,28 @@ function MessagesContent() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => {
+                      startCall({
+                        id: activeConversation.participant.id,
+                        fullName: activeConversation.participant.full_name,
+                        username: activeConversation.participant.username,
+                        avatarUrl: activeConversation.participant.avatar_url || null,
+                      });
+                    }}
+                    className="p-2 rounded-full bg-white/5 hover:bg-emerald-500/20 text-on-surface-variant hover:text-emerald-400 hover:border-emerald-500/30 border border-transparent transition-all active:scale-90"
+                    title={`Panggilan Suara dengan ${activeConversation.participant.full_name}`}
+                  >
+                    <Phone className="w-4 h-4" />
+                  </button>
+
                   <button
                     onClick={() => router.push(`/profile/${activeConversation.participant.username}`)}
                     className="p-2 rounded-full hover:bg-white/10 text-on-surface-variant hover:text-white transition-colors"
                     title="View Profile"
                   >
-                    <UserIcon className="w-5 h-5" />
+                    <UserIcon className="w-4 h-4" />
                   </button>
                 </div>
               </div>

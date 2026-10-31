@@ -110,14 +110,17 @@ export const NotesService = {
         });
 
         // 3. Coba upsert ke database user_notes jika tabel tersedia
-        await supabase.from('user_notes').upsert({
+        const { error: upsertError } = await supabase.from('user_notes').upsert({
           user_id: user.id,
           text: newNote.text,
           song_data: newNote.song ? JSON.stringify(newNote.song) : null,
           updated_at: new Date().toISOString(),
         });
-      } catch {
-        // ignore jika table belum ada di database
+        if (upsertError) {
+          console.warn('[NotesService] Supabase upsert error:', upsertError);
+        }
+      } catch (err) {
+        console.warn('[NotesService] Error saving note:', err);
       }
     }
 
