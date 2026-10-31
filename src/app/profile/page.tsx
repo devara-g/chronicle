@@ -10,9 +10,11 @@ import Image from 'next/image';
 import { formatNumber } from '@/lib/utils';
 import { Calendar, Link as LinkIcon, Sparkles } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
+import { useMusic } from '@/context/MusicContext';
 
 export default function ProfilePage() {
   const { user, posts, followingIds } = useApp();
+  const { currentTrack, isPlaying } = useMusic();
   const [activeTab, setActiveTab] = useState<'posts' | 'replies' | 'media' | 'likes'>('posts');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isFollowListOpen, setIsFollowListOpen] = useState(false);
@@ -102,6 +104,20 @@ export default function ProfilePage() {
           <div>
             <h2 className="font-headline font-bold text-xl md:text-2xl text-white tracking-tight">{user.full_name}</h2>
             <p className="text-on-surface-variant text-sm font-mono">@{user.username}</p>
+
+            {/* Now Playing / Listening to Badge */}
+            {currentTrack && isPlaying && (
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-xs font-mono text-emerald-400 mt-2">
+                <div className="flex items-center gap-0.5 h-3">
+                  <span className="w-0.5 bg-emerald-400 rounded-full animate-pulse h-2" />
+                  <span className="w-0.5 bg-emerald-400 rounded-full animate-bounce h-3" style={{ animationDelay: '0.15s' }} />
+                  <span className="w-0.5 bg-emerald-400 rounded-full animate-pulse h-2.5" style={{ animationDelay: '0.3s' }} />
+                </div>
+                <span className="truncate max-w-[280px]">
+                  Listening to: <strong>{currentTrack.title}</strong> — {currentTrack.artist}
+                </span>
+              </div>
+            )}
           </div>
 
           {user.bio && (

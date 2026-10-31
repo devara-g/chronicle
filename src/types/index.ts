@@ -82,6 +82,28 @@ export interface Conversation {
   updated_at: string;
 }
 
+export interface StoryItem {
+  id: string;
+  user_id: string;
+  media_url?: string | null;
+  media_type: 'image' | 'text';
+  text_content?: string | null;
+  bg_gradient?: string;
+  caption?: string | null;
+  created_at: string;
+  expires_at: string;
+  author: Profile;
+  views_count?: number;
+}
+
+export interface UserStoriesGroup {
+  user_id: string;
+  author: Profile;
+  hasUnseen: boolean;
+  stories: StoryItem[];
+  latestTimestamp: number;
+}
+
 export interface TrendingTopic {
   id: string;
   category: string;

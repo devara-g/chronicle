@@ -4,6 +4,7 @@ import React, { useState, useCallback } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
 import { ComposePost } from '@/components/feed/ComposePost';
 import { PostCard } from '@/components/feed/PostCard';
+import { NoirStoriesBar } from '@/components/feed/NoirStoriesBar';
 import { useApp } from '@/context/AppContext';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
@@ -103,6 +104,9 @@ export default function HomePage() {
           </button>
         </div>
       </div>
+
+      {/* Noir Stories Bar (24h Fleets) */}
+      <NoirStoriesBar />
 
       {/* Compose Area */}
       <ComposePost />

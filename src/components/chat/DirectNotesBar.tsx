@@ -25,6 +25,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { NotesService } from '@/lib/services/notes.service';
 import { MessagesService } from '@/lib/services/messages.service';
 import { formatTimeAgo } from '@/lib/utils';
+import { useMusic } from '@/context/MusicContext';
 
 export interface NoteSong {
   id: string;
@@ -52,6 +53,7 @@ export interface UserNote {
 
 export function DirectNotesBar() {
   const { user, friendIds } = useApp();
+  const { playTrack } = useMusic();
   const [myNote, setMyNote] = useState<UserNote | null>(null);
   const [friendsNotes, setFriendsNotes] = useState<UserNote[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -144,6 +146,13 @@ export function DirectNotesBar() {
         p.then(() => {
           audioRef.current = audio;
           setPlayingSongUrl(song.previewUrl);
+          // Sync with global FloatingMusicBar & Listening status
+          playTrack({
+            title: song.title,
+            artist: song.artist,
+            previewUrl: song.previewUrl,
+            coverUrl: song.coverUrl,
+          });
         }).catch((err) => {
           console.warn('Play was rejected:', err);
           setPlayingSongUrl(null);

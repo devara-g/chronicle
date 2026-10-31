@@ -14,10 +14,12 @@ export function AudioMessagePlayer({ audioUrl, duration, isMe = false }: AudioMe
   const [currentTime, setCurrentTime] = useState(0);
   const [audioDuration, setAudioDuration] = useState(duration || 0);
   const [isLoading, setIsLoading] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState<number>(1);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     const audio = new Audio(audioUrl);
+    audio.playbackRate = playbackRate;
     audioRef.current = audio;
 
     const setAudioData = () => {
@@ -57,8 +59,18 @@ export function AudioMessagePlayer({ audioUrl, duration, isMe = false }: AudioMe
       audioRef.current.pause();
       setIsPlaying(false);
     } else {
+      audioRef.current.playbackRate = playbackRate;
       audioRef.current.play().catch(err => console.warn('Audio playback error:', err));
       setIsPlaying(true);
+    }
+  };
+
+  const toggleSpeed = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const nextRate = playbackRate === 1 ? 1.5 : playbackRate === 1.5 ? 2 : 1;
+    setPlaybackRate(nextRate);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = nextRate;
     }
   };
 
@@ -78,19 +90,19 @@ export function AudioMessagePlayer({ audioUrl, duration, isMe = false }: AudioMe
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  // Generate simulated waveform bars
+  // 22 dynamic height bars representing audio waveform
   const progressRatio = audioDuration > 0 ? currentTime / audioDuration : 0;
-  const barHeights = [40, 75, 55, 90, 60, 45, 80, 100, 65, 50, 85, 70, 40, 95, 60, 75, 45, 90, 50, 65];
+  const barHeights = [40, 75, 55, 90, 60, 45, 80, 100, 65, 50, 85, 70, 40, 95, 60, 75, 45, 90, 50, 65, 80, 55];
 
   return (
-    <div className={`flex items-center gap-3 py-1 px-1 max-w-[280px] sm:max-w-[320px] select-none ${isMe ? 'text-black' : 'text-white'}`}>
+    <div className={`flex items-center gap-3 py-1 px-1.5 max-w-[290px] sm:max-w-[340px] select-none ${isMe ? 'text-black' : 'text-white'}`}>
       {/* Play/Pause Button */}
       <button
         type="button"
         onClick={togglePlay}
         className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-transform active:scale-90 shadow-md ${
           isMe
-            ? 'bg-black text-white hover:bg-black/80'
+            ? 'bg-black text-white hover:bg-black/85'
             : 'bg-white text-black hover:bg-white/90'
         }`}
         title={isPlaying ? 'Pause' : 'Play'}
@@ -110,7 +122,7 @@ export function AudioMessagePlayer({ audioUrl, duration, isMe = false }: AudioMe
         <div
           onClick={handleSeek}
           className="flex items-center gap-[3px] h-6 cursor-pointer group py-1"
-          title="Seek"
+          title="Geser posisi audio"
         >
           {barHeights.map((h, i) => {
             const barRatio = i / barHeights.length;
@@ -120,9 +132,9 @@ export function AudioMessagePlayer({ audioUrl, duration, isMe = false }: AudioMe
               <span
                 key={i}
                 style={{ height: `${h}%` }}
-                className={`w-[3px] rounded-full transition-all duration-150 ${
+                className={`w-[3px] rounded-full transition-all duration-150 group-hover:opacity-90 ${
                   isPlayed
-                    ? isMe ? 'bg-black' : 'bg-white'
+                    ? isMe ? 'bg-black' : 'bg-emerald-400'
                     : isMe ? 'bg-black/25' : 'bg-white/25'
                 } ${isPlaying && isPlayed ? 'animate-pulse' : ''}`}
               />
@@ -130,9 +142,24 @@ export function AudioMessagePlayer({ audioUrl, duration, isMe = false }: AudioMe
           })}
         </div>
 
-        {/* Time indicators */}
-        <div className={`flex items-center justify-between text-[11px] font-mono leading-none ${isMe ? 'text-black/70' : 'text-white/60'}`}>
+        {/* Time indicators & Speed Control Button */}
+        <div className={`flex items-center justify-between text-[11px] font-mono leading-none ${isMe ? 'text-black/75' : 'text-white/60'}`}>
           <span>{formatTime(currentTime)}</span>
+
+          {/* Speed Toggle: 1x / 1.5x / 2x */}
+          <button
+            type="button"
+            onClick={toggleSpeed}
+            className={`px-1.5 py-0.5 rounded text-[10px] font-bold border transition active:scale-90 ${
+              isMe
+                ? 'border-black/30 hover:bg-black/10 text-black'
+                : 'border-white/20 hover:bg-white/10 text-emerald-400'
+            }`}
+            title="Ubah kecepatan putar"
+          >
+            {playbackRate}x
+          </button>
+
           <span>{formatTime(audioDuration || 0)}</span>
         </div>
       </div>

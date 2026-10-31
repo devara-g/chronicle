@@ -357,8 +357,19 @@ function MessagesContent() {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         audioChunksRef.current = [];
 
-        // Upload to Supabase Storage
-        const audioUrl = await StorageService.uploadAudioBlob(audioBlob, user.id);
+        // Upload to Supabase Storage with base64 fallback
+        let audioUrl: string;
+        try {
+          audioUrl = await StorageService.uploadAudioBlob(audioBlob, user.id);
+        } catch (storageErr) {
+          console.warn('Storage upload failed, falling back to base64 audio data URL:', storageErr);
+          audioUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(audioBlob);
+          });
+        }
 
         const sentMsg = await MessagesService.sendMessage(
           selectedConvId,

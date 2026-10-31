@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { AppProvider } from "@/context/AppContext";
 import { VoiceCallProvider } from "@/context/VoiceCallContext";
+import { MusicProvider } from "@/context/MusicContext";
 import { ComposeModal } from "@/components/feed";
 import { VoiceCallModal } from "@/components/chat/VoiceCallModal";
+import { FloatingMusicBar } from "@/components/music/FloatingMusicBar";
 
 export const metadata: Metadata = {
   title: "Chronicle — Digital Noir Microblog",
@@ -30,9 +32,12 @@ export default function RootLayout({
       >
         <AppProvider>
           <VoiceCallProvider>
-            {children}
-            <ComposeModal />
-            <VoiceCallModal />
+            <MusicProvider>
+              {children}
+              <ComposeModal />
+              <VoiceCallModal />
+              <FloatingMusicBar />
+            </MusicProvider>
           </VoiceCallProvider>
         </AppProvider>
       </body>
