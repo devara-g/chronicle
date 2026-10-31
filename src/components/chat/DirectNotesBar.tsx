@@ -45,8 +45,8 @@ export interface UserNote {
   createdAt: number;
 }
 
-// ─── Saran Lagu Default Keywords untuk Fetch Live ─────────────────────────────
-const SUGGESTED_QUERIES = ['Lana Del Rey', 'Cigarettes After Sex', 'The Weeknd', 'Joji', 'Hindia'];
+// ─── Default empty suggestions (akan diisi secara real-time via /api/music/search) ──
+
 
 export function DirectNotesBar() {
   const { user } = useApp();
@@ -80,14 +80,39 @@ export function DirectNotesBar() {
     } else {
       if (audioRef.current) audioRef.current.pause();
       const audio = new Audio(song.previewUrl);
-      audio.volume = 0.8;
+      audio.volume = 0.85;
+
+      // Set currentTime ONLY when metadata is loaded to prevent DOMException reject!
       if (song.startTime && song.startTime > 0) {
-        audio.currentTime = song.startTime;
+        audio.addEventListener(
+          'loadedmetadata',
+          () => {
+            try {
+              audio.currentTime = song.startTime || 0;
+            } catch (err) {
+              console.warn('Set currentTime error:', err);
+            }
+          },
+          { once: true }
+        );
       }
+
       audio.onended = () => setPlayingSongUrl(null);
-      audio.play().catch(() => setPlayingSongUrl(null));
-      audioRef.current = audio;
-      setPlayingSongUrl(song.previewUrl);
+      audio.onerror = (err) => {
+        console.warn('Audio element error:', err);
+        setPlayingSongUrl(null);
+      };
+
+      const p = audio.play();
+      if (p !== undefined) {
+        p.then(() => {
+          audioRef.current = audio;
+          setPlayingSongUrl(song.previewUrl);
+        }).catch((err) => {
+          console.warn('Play was rejected:', err);
+          setPlayingSongUrl(null);
+        });
+      }
     }
   };
 
@@ -339,43 +364,38 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
   const [lyricSnippet, setLyricSnippet] = useState<string>(initialNote?.song?.lyricSnippet || '');
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
   const [previewAudioUrl, setPreviewAudioUrl] = useState<string | null>(null);
-  const [suggestedSongs, setSuggestedSongs] = useState<NoteSong[]>([]);
-  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
-
   const trimmerAudioRef = useRef<HTMLAudioElement | null>(null);
   const searchPreviewAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Fetch live suggestions directly from API on search open
+  const [suggestedSongs, setSuggestedSongs] = useState<NoteSong[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+
+  // Fetch live suggestions on mount via internal server proxy
   useEffect(() => {
-    if (showMusicSearch && suggestedSongs.length === 0) {
-      setLoadingSuggestions(true);
-      fetch('https://itunes.apple.com/search?term=Lana+Del+Rey+The+Weeknd&entity=song&limit=8')
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.results) {
-            const formatted: NoteSong[] = data.results
-              .filter((item: any) => item.previewUrl)
-              .map((item: any) => ({
-                id: String(item.trackId),
-                title: item.trackName,
-                artist: item.artistName,
-                previewUrl: item.previewUrl,
-                coverUrl: item.artworkUrl100 || item.artworkUrl60,
-                startTime: 0,
-                lyricSnippet: '',
-              }));
-            setSuggestedSongs(formatted);
-          }
-        })
-        .catch((e) => console.warn('Fetch suggestions err:', e))
-        .finally(() => setLoadingSuggestions(false));
-    }
-  }, [showMusicSearch, suggestedSongs.length]);
+    setMounted(true);
+    setLoadingSuggestions(true);
+    fetch('/api/music/search?suggestions=true')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.results && data.results.length > 0) {
+          setSuggestedSongs(data.results);
+        }
+      })
+      .catch((e) => console.warn('Fetch suggestions err:', e))
+      .finally(() => setLoadingSuggestions(false));
+  }, []);
 
   const handleTogglePreview = (e: React.MouseEvent, url: string) => {
     e.stopPropagation();
     if (previewAudioUrl === url) {
-      searchPreviewAudioRef.current?.pause();
+      if (searchPreviewAudioRef.current) {
+        searchPreviewAudioRef.current.pause();
+        try {
+          if (searchPreviewAudioRef.current.readyState >= 1) {
+            searchPreviewAudioRef.current.currentTime = 0;
+          }
+        } catch (e) {}
+      }
       setPreviewAudioUrl(null);
     } else {
       if (searchPreviewAudioRef.current) {
@@ -385,32 +405,45 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
       a.volume = 0.85;
       a.onended = () => setPreviewAudioUrl(null);
       a.onerror = () => setPreviewAudioUrl(null);
-      a.play()
-        .then(() => {
-          searchPreviewAudioRef.current = a;
-          setPreviewAudioUrl(url);
-        })
-        .catch((err) => {
-          console.warn('Audio play failed:', err);
-          setPreviewAudioUrl(null);
-        });
+      
+      const playPromise = a.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            searchPreviewAudioRef.current = a;
+            setPreviewAudioUrl(url);
+          })
+          .catch((err) => {
+            console.warn('Audio playback error:', err);
+            setPreviewAudioUrl(null);
+          });
+      }
     }
   };
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  // Update audio when selected song or start time changes
+  // Update audio when selected song changes
   useEffect(() => {
     if (selectedSong?.previewUrl) {
       if (trimmerAudioRef.current) {
         trimmerAudioRef.current.pause();
       }
       const a = new Audio(selectedSong.previewUrl);
-      a.volume = 0.8;
-      a.currentTime = startTime;
+      a.volume = 0.85;
+      if (startTime > 0) {
+        a.addEventListener(
+          'loadedmetadata',
+          () => {
+            try {
+              a.currentTime = startTime;
+            } catch (e) {
+              console.warn('Set currentTime error:', e);
+            }
+          },
+          { once: true }
+        );
+      }
       a.onended = () => setIsPlayingPreview(false);
+      a.onerror = () => setIsPlayingPreview(false);
       trimmerAudioRef.current = a;
     }
     return () => {
@@ -425,19 +458,36 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
       trimmerAudioRef.current.pause();
       setIsPlayingPreview(false);
     } else {
-      trimmerAudioRef.current.currentTime = startTime;
-      trimmerAudioRef.current.play().catch(() => {});
-      setIsPlayingPreview(true);
+      try {
+        if (trimmerAudioRef.current.readyState >= 1) {
+          trimmerAudioRef.current.currentTime = startTime;
+        }
+      } catch (e) {}
+      const playPromise = trimmerAudioRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => setIsPlayingPreview(true))
+          .catch((err) => {
+            console.warn('Trimmer audio play error:', err);
+            setIsPlayingPreview(false);
+          });
+      }
     }
   };
 
   const handleStartTimeChange = (val: number) => {
     setStartTime(val);
     if (trimmerAudioRef.current) {
-      trimmerAudioRef.current.currentTime = val;
+      try {
+        if (trimmerAudioRef.current.readyState >= 1) {
+          trimmerAudioRef.current.currentTime = val;
+        }
+      } catch (e) {}
       if (!isPlayingPreview) {
-        trimmerAudioRef.current.play().catch(() => {});
-        setIsPlayingPreview(true);
+        const p = trimmerAudioRef.current.play();
+        if (p !== undefined) {
+          p.then(() => setIsPlayingPreview(true)).catch(() => {});
+        }
       }
     }
   };
@@ -450,23 +500,10 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
     }
     setSearching(true);
     try {
-      const res = await fetch(
-        `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=10`
-      );
+      const res = await fetch(`/api/music/search?q=${encodeURIComponent(q)}&limit=10`);
       const data = await res.json();
       if (data.results) {
-        const formatted: NoteSong[] = data.results
-          .filter((item: any) => item.previewUrl)
-          .map((item: any) => ({
-            id: String(item.trackId),
-            title: item.trackName,
-            artist: item.artistName,
-            previewUrl: item.previewUrl,
-            coverUrl: item.artworkUrl100 || item.artworkUrl60,
-            startTime: 0,
-            lyricSnippet: '',
-          }));
-        setSearchResults(formatted);
+        setSearchResults(data.results);
       }
     } catch (err) {
       console.warn('Failed searching song:', err);
@@ -527,8 +564,17 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
         <div className="flex flex-col items-center py-2">
           <div className="bg-[#1e1e1e] border border-white/20 rounded-2xl p-2.5 max-w-[210px] text-center shadow-lg relative mb-3">
             {selectedSong && (
-              <div className="flex items-center gap-1.5 mb-1.5 text-left bg-white/5 p-1 rounded-lg">
-                <Music className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+              <div className="flex items-center gap-2 mb-1.5 text-left bg-white/5 p-1 rounded-lg">
+                {selectedSong.coverUrl ? (
+                  <img
+                    src={selectedSong.coverUrl}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    className="w-6 h-6 rounded-md object-cover flex-shrink-0"
+                  />
+                ) : (
+                  <Music className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                )}
                 <div className="truncate min-w-0 flex-1">
                   <p className="font-bold text-[11px] text-white truncate">{selectedSong.title}</p>
                   <p className="text-[10px] text-on-surface-variant truncate">{selectedSong.artist}</p>
@@ -579,89 +625,94 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
               <span>{searchQuery.trim() ? 'Hasil Pencarian' : '✨ Saran Lagu Untuk Anda'}</span>
             </div>
 
-            {/* Results / Suggestions List */}
-            {loadingSuggestions && displayedSongs.length === 0 ? (
-              <div className="flex items-center justify-center py-8 gap-2 text-xs font-mono text-on-surface-variant">
-                <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                <span>Memuat lagu trending & saran...</span>
-              </div>
-            ) : (
-              <div className="max-h-56 overflow-y-auto space-y-1.5 divide-y divide-white/5 pr-1 no-scrollbar">
-                {displayedSongs.length === 0 && searchQuery.trim() && !searching ? (
-                  <p className="text-center text-xs font-mono text-on-surface-variant py-4">
-                    Lagu tidak ditemukan. Coba judul lain.
-                  </p>
-                ) : (
-                  displayedSongs.map((song) => {
-                    const isPreviewing = previewAudioUrl === song.previewUrl;
-
-                    return (
-                      <div
-                        key={song.id}
-                        className="flex items-center justify-between p-2 rounded-2xl hover:bg-white/[0.06] transition-colors group"
-                      >
-                        <div
-                          onClick={() => handleSelectSong(song)}
-                          className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
-                        >
-                          {/* Artwork with safe fallback (no broken image icons) */}
-                          <div className="relative w-10 h-10 rounded-xl overflow-hidden bg-gradient-to-br from-neutral-800 to-neutral-900 border border-white/10 flex items-center justify-center flex-shrink-0 shadow-md">
-                            {song.coverUrl && (
-                              <img
-                                src={song.coverUrl}
-                                alt=""
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                }}
-                              />
-                            )}
-                            <Music className="w-4 h-4 text-sky-400 absolute pointer-events-none opacity-40" />
-                          </div>
-
-                          <div className="truncate min-w-0 pr-2">
-                            <p className="text-xs font-bold text-white truncate leading-tight group-hover:text-sky-300 transition-colors">
-                              {song.title}
-                            </p>
-                            <p className="text-[10px] text-on-surface-variant truncate font-mono mt-0.5">
-                              {song.artist}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Actions: Play Preview + Choose Button */}
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <button
-                            type="button"
-                            onClick={(e) => handleTogglePreview(e, song.previewUrl)}
-                            className={`p-2 rounded-full transition-all active:scale-90 ${
-                              isPreviewing
-                                ? 'bg-sky-400 text-black shadow-[0_0_12px_rgba(56,189,248,0.5)]'
-                                : 'bg-white/10 hover:bg-white/20 text-white'
-                            }`}
-                            title={isPreviewing ? 'Stop preview' : 'Putar 30 detik preview'}
-                          >
-                            {isPreviewing ? (
-                              <Pause className="w-3.5 h-3.5 fill-black" />
-                            ) : (
-                              <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
-                            )}
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleSelectSong(song)}
-                            className="px-3.5 py-1.5 rounded-full bg-white text-black font-headline font-bold text-xs hover:bg-white/90 active:scale-95 transition-all shadow-sm"
-                          >
-                            Pilih
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
+            {/* Loading Skeleton */}
+            {loadingSuggestions && displayedSongs.length === 0 && (
+              <div className="space-y-2 py-2">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="flex items-center gap-3 p-2 rounded-2xl bg-white/[0.02] animate-pulse">
+                    <div className="w-10 h-10 rounded-xl bg-white/10 shrink-0" />
+                    <div className="flex-1 space-y-1.5">
+                      <div className="h-3 bg-white/10 rounded w-2/3" />
+                      <div className="h-2.5 bg-white/5 rounded w-1/3" />
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
+
+            {/* Results / Suggestions List */}
+            <div className="max-h-56 overflow-y-auto space-y-1.5 divide-y divide-white/5 pr-1 no-scrollbar">
+              {displayedSongs.map((song) => {
+                const isPreviewing = previewAudioUrl === song.previewUrl;
+
+                return (
+                  <div
+                    key={song.id}
+                    className="flex items-center justify-between p-2 rounded-2xl hover:bg-white/[0.06] transition-colors group"
+                  >
+                    <div
+                      onClick={() => handleSelectSong(song)}
+                      className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
+                    >
+                      {/* Artwork with safe fallback (no broken image icons) */}
+                      <div className="relative w-10 h-10 rounded-xl overflow-hidden bg-gradient-to-br from-neutral-800 to-neutral-900 border border-white/10 flex items-center justify-center flex-shrink-0 shadow-md">
+                        {song.coverUrl && (
+                          <img
+                            src={song.coverUrl}
+                            alt=""
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              // Hide broken image smoothly
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        )}
+                        <Music className="w-4 h-4 text-sky-400 absolute pointer-events-none opacity-40" />
+                      </div>
+
+                      <div className="truncate min-w-0 pr-2">
+                        <p className="text-xs font-bold text-white truncate leading-tight group-hover:text-sky-300 transition-colors">
+                          {song.title}
+                        </p>
+                        <p className="text-[10px] text-on-surface-variant truncate font-mono mt-0.5">
+                          {song.artist}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Actions: Play Preview + Choose Button */}
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {/* Audio preview play/stop */}
+                      <button
+                        type="button"
+                        onClick={(e) => handleTogglePreview(e, song.previewUrl)}
+                        className={`p-2 rounded-full transition-all active:scale-90 ${
+                          isPreviewing
+                            ? 'bg-sky-400 text-black shadow-[0_0_12px_rgba(56,189,248,0.5)]'
+                            : 'bg-white/10 hover:bg-white/20 text-white'
+                        }`}
+                        title={isPreviewing ? 'Stop preview' : 'Putar 30 detik preview'}
+                      >
+                        {isPreviewing ? (
+                          <Pause className="w-3.5 h-3.5 fill-black" />
+                        ) : (
+                          <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSelectSong(song)}
+                        className="px-3.5 py-1.5 rounded-full bg-white text-black font-headline font-bold text-xs hover:bg-white/90 active:scale-95 transition-all shadow-sm"
+                      >
+                        Pilih
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
 
             <button
               type="button"
@@ -697,7 +748,12 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5 min-w-0">
                     {selectedSong.coverUrl ? (
-                      <img src={selectedSong.coverUrl} alt="Cover" className="w-9 h-9 rounded-lg object-cover" />
+                      <img
+                        src={selectedSong.coverUrl}
+                        alt="Cover"
+                        referrerPolicy="no-referrer"
+                        className="w-9 h-9 rounded-lg object-cover flex-shrink-0"
+                      />
                     ) : (
                       <Music className="w-5 h-5 text-sky-400" />
                     )}
@@ -838,9 +894,30 @@ function RevealNoteModal({ note, isMe, onClose, onEdit, onDelete }: RevealNoteMo
     if (note.song?.previewUrl) {
       const audio = new Audio(note.song.previewUrl);
       audio.volume = 0.85;
-      if (note.song.startTime) audio.currentTime = note.song.startTime;
+      if (note.song.startTime && note.song.startTime > 0) {
+        audio.addEventListener(
+          'loadedmetadata',
+          () => {
+            try {
+              audio.currentTime = note.song?.startTime || 0;
+            } catch (e) {
+              console.warn('Set currentTime error:', e);
+            }
+          },
+          { once: true }
+        );
+      }
       audio.onended = () => setIsPlaying(false);
-      audio.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+      audio.onerror = () => setIsPlaying(false);
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => setIsPlaying(true))
+          .catch((err) => {
+            console.warn('Reveal note audio play error:', err);
+            setIsPlaying(false);
+          });
+      }
       audioRef.current = audio;
     }
     return () => {
@@ -935,7 +1012,15 @@ function RevealNoteModal({ note, isMe, onClose, onEdit, onDelete }: RevealNoteMo
               }`}
             >
               {note.song.coverUrl ? (
-                <img src={note.song.coverUrl} alt="Cover" className="w-full h-full object-cover" />
+                <img
+                  src={note.song.coverUrl}
+                  alt="Cover"
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
               ) : (
                 <div className="w-full h-full bg-neutral-800 flex items-center justify-center">
                   <Disc3 className="w-8 h-8 text-sky-400" />
