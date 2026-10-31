@@ -17,6 +17,7 @@ export interface CallParticipant {
 interface VoiceCallContextType {
   callStatus: CallStatus;
   remoteUser: CallParticipant | null;
+  remoteStream: MediaStream | null;
   isMuted: boolean;
   callDuration: number;
   startCall: (target: CallParticipant) => Promise<void>;
@@ -28,14 +29,29 @@ interface VoiceCallContextType {
 
 const VoiceCallContext = createContext<VoiceCallContextType | undefined>(undefined);
 
+// Reliable STUN + Public TURN Servers for cross-network / ISP NAT Traversal
 const ICE_SERVERS: RTCConfiguration = {
   iceServers: [
+    // Google Public STUN
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun3.l.google.com:19302' },
     { urls: 'stun:stun4.l.google.com:19302' },
+    // Twilio Public STUN
+    { urls: 'stun:global.stun.twilio.com:3478' },
+    // OpenRelay Public Free TURN Relays (metered.ca) for NAT traversal across different ISPs/cellular
+    {
+      urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:443',
+        'turn:openrelay.metered.ca:443?transport=tcp',
+      ],
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
   ],
+  iceCandidatePoolSize: 10,
 };
 
 const CALL_CHANNEL_NAME = 'chronicle_global_voice_calls';
@@ -46,6 +62,7 @@ export function VoiceCallProvider({ children }: { children: React.ReactNode }) {
   const { user } = useApp();
   const [callStatus, setCallStatus] = useState<CallStatus>('idle');
   const [remoteUser, setRemoteUser] = useState<CallParticipant | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
 
@@ -57,7 +74,7 @@ export function VoiceCallProvider({ children }: { children: React.ReactNode }) {
   const ringTimeoutRef = useRef<any>(null);
   const localBroadcastRef = useRef<BroadcastChannel | null>(null);
   const supabaseChannelRef = useRef<any>(null);
-  const iceCandidateQueueRef = useRef<RTCIceCandidateInit[]>([]);
+  const iceCandidateQueueRef = useRef<any[]>([]);
 
   // Refs for stable access in event listeners
   const userRef = useRef(user);
@@ -112,6 +129,7 @@ export function VoiceCallProvider({ children }: { children: React.ReactNode }) {
       pcRef.current.onicecandidate = null;
       pcRef.current.ontrack = null;
       pcRef.current.onconnectionstatechange = null;
+      pcRef.current.oniceconnectionstatechange = null;
       pcRef.current.close();
       pcRef.current = null;
     }
@@ -124,6 +142,7 @@ export function VoiceCallProvider({ children }: { children: React.ReactNode }) {
     activeRoomIdRef.current = null;
     setCallStatus('idle');
     setRemoteUser(null);
+    setRemoteStream(null);
     setIsMuted(false);
     setCallDuration(0);
   }, []);
@@ -148,7 +167,7 @@ export function VoiceCallProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {}
     }
 
-    // 3. Supabase Realtime Broadcast (cross-device, cross-browser, cross-session)
+    // 3. Supabase Realtime Broadcast (cross-device, cross-browser, cross-network)
     if (isSupabaseConfigured()) {
       if (supabaseChannelRef.current) {
         supabaseChannelRef.current
@@ -159,7 +178,6 @@ export function VoiceCallProvider({ children }: { children: React.ReactNode }) {
           })
           .catch((err: any) => console.warn('[VoiceCall] Supabase send error:', err));
       } else {
-        // Fallback: create & subscribe channel then send
         const ch = supabase.channel(CALL_CHANNEL_NAME);
         ch.subscribe((status) => {
           if (status === 'SUBSCRIBED') {
@@ -182,28 +200,54 @@ export function VoiceCallProvider({ children }: { children: React.ReactNode }) {
     // Send local ICE candidates to remote peer
     pc.onicecandidate = (event) => {
       if (event.candidate && userRef.current) {
+        const candidatePayload = event.candidate.toJSON
+          ? event.candidate.toJSON()
+          : {
+              candidate: event.candidate.candidate,
+              sdpMid: event.candidate.sdpMid,
+              sdpMLineIndex: event.candidate.sdpMLineIndex,
+            };
+
         sendSignal(roomId, {
           type: 'candidate',
-          candidate: event.candidate,
+          candidate: candidatePayload,
           fromId: userRef.current.id,
           toId: targetId,
         });
       }
     };
 
-    // Receive remote audio track
+    // Receive remote audio track (Support both event.streams and event.track for mobile/Safari)
     pc.ontrack = (event) => {
-      if (event.streams && event.streams[0] && remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = event.streams[0];
-        remoteAudioRef.current.play().catch((e) => console.warn('[VoiceCall] Audio play error:', e));
+      console.log('[VoiceCall] ontrack fired. Kind:', event.track.kind, 'Streams:', event.streams?.length);
+      let stream: MediaStream;
+      if (event.streams && event.streams[0]) {
+        stream = event.streams[0];
+      } else {
+        stream = new MediaStream([event.track]);
+      }
+
+      setRemoteStream(stream);
+
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = stream;
+        remoteAudioRef.current
+          .play()
+          .catch((e) => console.warn('[VoiceCall] Background audio play error:', e));
       }
     };
 
-    pc.onconnectionstatechange = () => {
-      const state = pc.connectionState;
-      console.log('[VoiceCall] Connection state:', state);
+    // Listen to both connectionState and iceConnectionState for maximum browser compatibility
+    const checkConnection = () => {
+      const connState = pc.connectionState;
+      const iceState = pc.iceConnectionState;
+      console.log('[VoiceCall] State check - Connection:', connState, 'ICE:', iceState);
 
-      if (state === 'connected') {
+      if (
+        connState === 'connected' ||
+        iceState === 'connected' ||
+        iceState === 'completed'
+      ) {
         ringtone.stop();
         if (ringTimeoutRef.current) {
           clearTimeout(ringTimeoutRef.current);
@@ -215,10 +259,18 @@ export function VoiceCallProvider({ children }: { children: React.ReactNode }) {
             setCallDuration((prev) => prev + 1);
           }, 1000);
         }
-      } else if (state === 'disconnected' || state === 'failed' || state === 'closed') {
+      } else if (
+        connState === 'failed' ||
+        connState === 'closed' ||
+        iceState === 'failed' ||
+        iceState === 'closed'
+      ) {
         cleanupCall();
       }
     };
+
+    pc.onconnectionstatechange = checkConnection;
+    pc.oniceconnectionstatechange = checkConnection;
 
     pcRef.current = pc;
     return pc;
@@ -237,12 +289,11 @@ export function VoiceCallProvider({ children }: { children: React.ReactNode }) {
     // Ignore signals not addressed to current user
     if (toId && toId !== currentUser.id) return;
 
-    console.log('[VoiceCall] Received signal:', type, { fromId: fromId || from?.id, toId, roomId });
+    console.log('[VoiceCall] Signal received:', type, { fromId: fromId || from?.id, toId, roomId });
 
     if (type === 'call_request') {
       // Incoming call request
       if (callStatusRef.current !== 'idle') {
-        // Current user is already on another call: reject with busy
         sendSignal(roomId, { type: 'call_busy', fromId: currentUser.id, toId: from.id });
         return;
       }
@@ -263,7 +314,7 @@ export function VoiceCallProvider({ children }: { children: React.ReactNode }) {
       if (offer) {
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(offer));
-          // Process any early buffered ICE candidates
+          // Process early buffered ICE candidates
           for (const c of iceCandidateQueueRef.current) {
             try {
               await pc.addIceCandidate(new RTCIceCandidate(c));
@@ -285,7 +336,7 @@ export function VoiceCallProvider({ children }: { children: React.ReactNode }) {
 
         try {
           await pcRef.current.setRemoteDescription(new RTCSessionDescription(answer));
-          // Process any early buffered ICE candidates
+          // Process early buffered ICE candidates
           for (const c of iceCandidateQueueRef.current) {
             try {
               await pcRef.current.addIceCandidate(new RTCIceCandidate(c));
@@ -305,7 +356,7 @@ export function VoiceCallProvider({ children }: { children: React.ReactNode }) {
       }
     } else if (type === 'candidate') {
       // Remote ICE candidate received
-      if (candidate) {
+      if (candidate && candidate.candidate) {
         if (pcRef.current && pcRef.current.remoteDescription) {
           try {
             await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate));
@@ -317,7 +368,6 @@ export function VoiceCallProvider({ children }: { children: React.ReactNode }) {
         }
       }
     } else if (type === 'call_rejected' || type === 'call_busy' || type === 'call_ended') {
-      // Call ended or rejected by remote peer
       cleanupCall();
     }
   }, [createPeerConnection, sendSignal, cleanupCall]);
@@ -388,8 +438,15 @@ export function VoiceCallProvider({ children }: { children: React.ReactNode }) {
     if (!currentUser || callStatusRef.current !== 'idle') return;
 
     try {
-      // Acquire microphone
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      // Acquire microphone with echo cancellation and auto gain
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      });
       localStreamRef.current = stream;
 
       const sortedIds = [currentUser.id, target.id].sort();
@@ -409,8 +466,11 @@ export function VoiceCallProvider({ children }: { children: React.ReactNode }) {
       const pc = createPeerConnection(roomId, target.id);
       stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
-      // Create & set SDP Offer
-      const offer = await pc.createOffer();
+      // Create & set SDP Offer with audio receive enabled
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: false,
+      });
       await pc.setLocalDescription(offer);
 
       // Dispatch call request signal
@@ -446,7 +506,14 @@ export function VoiceCallProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      });
       localStreamRef.current = stream;
 
       const pc = pcRef.current || createPeerConnection(roomId, remote.id);
@@ -523,6 +590,7 @@ export function VoiceCallProvider({ children }: { children: React.ReactNode }) {
       value={{
         callStatus,
         remoteUser,
+        remoteStream,
         isMuted,
         callDuration,
         startCall,

@@ -16,6 +16,7 @@ export function VoiceCallModal() {
   const {
     callStatus,
     remoteUser,
+    remoteStream,
     isMuted,
     callDuration,
     acceptCall,
@@ -25,10 +26,21 @@ export function VoiceCallModal() {
   } = useVoiceCall();
 
   const [mounted, setMounted] = useState(false);
+  const domAudioRef = React.useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Ensure DOM audio element gets the remote stream and plays without autoplay blocks
+  useEffect(() => {
+    if (domAudioRef.current && remoteStream) {
+      domAudioRef.current.srcObject = remoteStream;
+      domAudioRef.current.play().catch((err) => {
+        console.warn('[VoiceCallModal] DOM Audio play blocked:', err);
+      });
+    }
+  }, [remoteStream]);
 
   if (!mounted || callStatus === 'idle' || !remoteUser) return null;
 
@@ -187,6 +199,15 @@ export function VoiceCallModal() {
           )}
         </div>
       </div>
+
+      {/* Hidden in-DOM Audio Element for reliable WebRTC audio output across all browsers */}
+      <audio
+        ref={domAudioRef}
+        autoPlay
+        playsInline
+        className="hidden"
+        aria-hidden="true"
+      />
     </div>
   );
 
