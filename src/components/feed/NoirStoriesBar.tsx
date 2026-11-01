@@ -11,7 +11,7 @@ import { CreateStoryModal } from '@/components/feed/CreateStoryModal';
 import { StoryViewerModal } from '@/components/feed/StoryViewerModal';
 
 export function NoirStoriesBar() {
-  const { user, followingIds } = useApp();
+  const { user, followingIds, followerIds, friendIds } = useApp();
   const [myGroup, setMyGroup] = useState<UserStoriesGroup | null>(null);
   const [friendsGroups, setFriendsGroups] = useState<UserStoriesGroup[]>([]);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -28,16 +28,17 @@ export function NoirStoriesBar() {
   const loadStories = useCallback(async () => {
     if (!user) return;
     try {
+      const connectedIds = Array.from(new Set([...followingIds, ...followerIds, ...friendIds]));
       const { myGroup: myG, friendsGroups: friendsG } = await StoriesService.getStories(
         user.id,
-        followingIds
+        connectedIds
       );
       setMyGroup(myG);
       setFriendsGroups(friendsG);
     } catch (e) {
       console.warn('Load stories error:', e);
     }
-  }, [user, followingIds]);
+  }, [user, followingIds, followerIds, friendIds]);
 
   useEffect(() => {
     loadStories();

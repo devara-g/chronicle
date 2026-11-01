@@ -82,6 +82,14 @@ export interface Conversation {
   updated_at: string;
 }
 
+export interface StoryViewer {
+  id: string;
+  story_id: string;
+  viewer_id: string;
+  viewed_at: string;
+  viewer: Profile;
+}
+
 export interface StoryItem {
   id: string;
   user_id: string;
@@ -94,6 +102,7 @@ export interface StoryItem {
   expires_at: string;
   author: Profile;
   views_count?: number;
+  viewers?: StoryViewer[];
 }
 
 export interface UserStoriesGroup {
