@@ -13,7 +13,6 @@ import {
   Users,
   Volume2,
   VolumeX,
-  Music,
 } from 'lucide-react';
 import { UserStoriesGroup, StoryItem, StoryViewer } from '@/types';
 import { useApp } from '@/context/AppContext';
@@ -28,7 +27,7 @@ interface StoryViewerModalProps {
   onStoryDeleted: () => void;
 }
 
-const STORY_DURATION_MS = 5500;
+const DEFAULT_STORY_DURATION_MS = 6000;
 
 export function StoryViewerModal({
   groups,
@@ -76,7 +75,12 @@ export function StoryViewerModal({
   const currentGroup = groups[currentGroupIdx] || null;
   const currentStory: StoryItem | null = currentGroup?.stories[currentStoryIdx] || null;
 
-  // Audio Playback for Official Music
+  // Calculate dynamic story duration (e.g. 15s or 30s if song has duration, else default 6s)
+  const currentStoryDurationMs = currentStory?.song_data?.duration
+    ? currentStory.song_data.duration * 1000
+    : DEFAULT_STORY_DURATION_MS;
+
+  // Audio Playback for Official Music with custom startTime & duration
   useEffect(() => {
     if (!isOpen || !currentStory?.song_data?.previewUrl) {
       if (storyAudioRef.current) {
@@ -90,10 +94,36 @@ export function StoryViewerModal({
       storyAudioRef.current.pause();
     }
 
+    const initialStartTime = currentStory.song_data.startTime || 0;
+    const clipDuration = currentStory.song_data.duration || 15;
+    const clipEndTime = initialStartTime + clipDuration;
+
     const audio = new Audio(currentStory.song_data.previewUrl);
     audio.volume = isMuted ? 0 : 0.85;
-    audio.loop = true;
     storyAudioRef.current = audio;
+
+    const setInitialTime = () => {
+      try {
+        if (initialStartTime > 0) {
+          audio.currentTime = initialStartTime;
+        }
+      } catch (e) {
+        console.warn('Set initial currentTime error:', e);
+      }
+    };
+
+    if (audio.readyState >= 1) {
+      setInitialTime();
+    } else {
+      audio.addEventListener('loadedmetadata', setInitialTime, { once: true });
+    }
+
+    // Loop inside chosen segment if audio is longer
+    audio.ontimeupdate = () => {
+      if (clipEndTime && audio.currentTime >= clipEndTime) {
+        audio.currentTime = initialStartTime;
+      }
+    };
 
     if (!isPaused && !isViewersListOpen) {
       audio.play().catch((err) => {
@@ -192,7 +222,7 @@ export function StoryViewerModal({
     }
   }, [currentStoryIdx, currentGroupIdx, groups]);
 
-  // Auto-advancing Timer Animation (Pauses when long-held or viewers list is open)
+  // Auto-advancing Timer Animation (Dynamic duration: 15s or 30s for songs, 6s default)
   useEffect(() => {
     if (!isOpen || !currentStory || isPaused || isViewersListOpen) {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -203,10 +233,10 @@ export function StoryViewerModal({
 
     timerRef.current = setInterval(() => {
       const elapsed = Date.now() - startTimeRef.current;
-      const pct = Math.min(100, (elapsed / STORY_DURATION_MS) * 100);
+      const pct = Math.min(100, (elapsed / currentStoryDurationMs) * 100);
       setProgress(pct);
 
-      if (elapsed >= STORY_DURATION_MS) {
+      if (elapsed >= currentStoryDurationMs) {
         clearInterval(timerRef.current);
         handleNext();
       }
@@ -215,13 +245,13 @@ export function StoryViewerModal({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isOpen, currentStory, isPaused, isViewersListOpen, handleNext]);
+  }, [isOpen, currentStory, isPaused, isViewersListOpen, handleNext, currentStoryDurationMs]);
 
   // Pause on Hold
   const handlePointerDown = () => {
     if (isViewersListOpen) return;
     setIsPaused(true);
-    elapsedBeforePauseRef.current = (progress / 100) * STORY_DURATION_MS;
+    elapsedBeforePauseRef.current = (progress / 100) * currentStoryDurationMs;
   };
 
   const handlePointerUp = () => {
@@ -352,7 +382,7 @@ export function StoryViewerModal({
                 e.stopPropagation();
                 setIsMuted((prev) => !prev);
               }}
-              className="pointer-events-auto flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-black/65 backdrop-blur-md border border-white/20 text-white shadow-xl max-w-[88%] cursor-pointer hover:bg-black/80 transition active:scale-95"
+              className="pointer-events-auto flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-black/65 backdrop-blur-md border border-white/20 text-white shadow-xl max-w-[90%] cursor-pointer hover:bg-black/80 transition active:scale-95"
               title="Ketuk untuk bisukan / bunyikan musik"
             >
               {/* Equalizer animation */}
@@ -374,12 +404,12 @@ export function StoryViewerModal({
                 />
               </div>
 
-              <div className="truncate text-left min-w-0">
+              <div className="truncate text-left min-w-0 flex-1">
                 <p className="text-[11px] font-semibold text-white truncate leading-tight">
                   {currentStory.song_data.title}
                 </p>
                 <p className="text-[9px] font-mono text-white/60 truncate leading-tight">
-                  {currentStory.song_data.artist}
+                  {currentStory.song_data.artist} • {currentStory.song_data.duration || 15}s
                 </p>
               </div>
 

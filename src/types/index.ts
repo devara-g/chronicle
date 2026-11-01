@@ -89,6 +89,7 @@ export interface StorySong {
   previewUrl: string;
   coverUrl?: string | null;
   startTime?: number;
+  duration?: number;
 }
 
 export interface StoryViewer {
