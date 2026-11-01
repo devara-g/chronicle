@@ -82,6 +82,15 @@ export interface Conversation {
   updated_at: string;
 }
 
+export interface StorySong {
+  id: string;
+  title: string;
+  artist: string;
+  previewUrl: string;
+  coverUrl?: string | null;
+  startTime?: number;
+}
+
 export interface StoryViewer {
   id: string;
   story_id: string;
@@ -98,6 +107,7 @@ export interface StoryItem {
   text_content?: string | null;
   bg_gradient?: string;
   caption?: string | null;
+  song_data?: StorySong | null;
   created_at: string;
   expires_at: string;
   author: Profile;

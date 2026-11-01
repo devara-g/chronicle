@@ -3,7 +3,18 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
-import { X, ChevronLeft, ChevronRight, Trash2, Eye, ChevronUp, Users } from 'lucide-react';
+import {
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Trash2,
+  Eye,
+  ChevronUp,
+  Users,
+  Volume2,
+  VolumeX,
+  Music,
+} from 'lucide-react';
 import { UserStoriesGroup, StoryItem, StoryViewer } from '@/types';
 import { useApp } from '@/context/AppContext';
 import { StoriesService } from '@/lib/services/stories.service';
@@ -34,14 +45,22 @@ export function StoryViewerModal({
   const [isPaused, setIsPaused] = useState(false);
   const [viewers, setViewers] = useState<StoryViewer[]>([]);
   const [isViewersListOpen, setIsViewersListOpen] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const [isMuted, setIsMuted] = useState(false);
 
   const timerRef = useRef<any>(null);
   const startTimeRef = useRef<number>(Date.now());
   const elapsedBeforePauseRef = useRef<number>(0);
+  const storyAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => {
+      if (storyAudioRef.current) {
+        storyAudioRef.current.pause();
+        storyAudioRef.current = null;
+      }
+    };
+  }, []);
 
   // Sync initial group
   useEffect(() => {
@@ -56,6 +75,53 @@ export function StoryViewerModal({
 
   const currentGroup = groups[currentGroupIdx] || null;
   const currentStory: StoryItem | null = currentGroup?.stories[currentStoryIdx] || null;
+
+  // Audio Playback for Official Music
+  useEffect(() => {
+    if (!isOpen || !currentStory?.song_data?.previewUrl) {
+      if (storyAudioRef.current) {
+        storyAudioRef.current.pause();
+        storyAudioRef.current = null;
+      }
+      return;
+    }
+
+    if (storyAudioRef.current) {
+      storyAudioRef.current.pause();
+    }
+
+    const audio = new Audio(currentStory.song_data.previewUrl);
+    audio.volume = isMuted ? 0 : 0.85;
+    audio.loop = true;
+    storyAudioRef.current = audio;
+
+    if (!isPaused && !isViewersListOpen) {
+      audio.play().catch((err) => {
+        console.warn('Story audio autoplay blocked:', err);
+      });
+    }
+
+    return () => {
+      audio.pause();
+    };
+  }, [isOpen, currentStory?.id, currentStory?.song_data?.previewUrl]);
+
+  // Sync audio with pause/resume
+  useEffect(() => {
+    if (!storyAudioRef.current) return;
+    if (isPaused || isViewersListOpen) {
+      storyAudioRef.current.pause();
+    } else {
+      storyAudioRef.current.play().catch(() => {});
+    }
+  }, [isPaused, isViewersListOpen]);
+
+  // Sync audio with mute toggle
+  useEffect(() => {
+    if (storyAudioRef.current) {
+      storyAudioRef.current.volume = isMuted ? 0 : 0.85;
+    }
+  }, [isMuted]);
 
   // Mark story as seen & record view if viewer is someone else
   useEffect(() => {
@@ -83,6 +149,14 @@ export function StoryViewerModal({
     return () => window.removeEventListener('chronicle_story_viewers_updated', handleUpdate);
   }, [currentStory, user]);
 
+  const handleCloseModal = useCallback(() => {
+    if (storyAudioRef.current) {
+      storyAudioRef.current.pause();
+      storyAudioRef.current = null;
+    }
+    onClose();
+  }, [onClose]);
+
   // Navigate to Next Story or Next Group
   const handleNext = useCallback(() => {
     if (!currentGroup) return;
@@ -98,9 +172,9 @@ export function StoryViewerModal({
       setProgress(0);
       elapsedBeforePauseRef.current = 0;
     } else {
-      onClose();
+      handleCloseModal();
     }
-  }, [currentGroup, currentStoryIdx, currentGroupIdx, groups.length, onClose]);
+  }, [currentGroup, currentStoryIdx, currentGroupIdx, groups.length, handleCloseModal]);
 
   // Navigate to Previous Story or Previous Group
   const handlePrev = useCallback(() => {
@@ -229,6 +303,25 @@ export function StoryViewerModal({
           </div>
 
           <div className="flex items-center gap-1">
+            {/* Music Mute Toggle (if story has song) */}
+            {currentStory.song_data && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsMuted((prev) => !prev);
+                }}
+                className="p-2 rounded-full hover:bg-white/10 text-white/80 hover:text-white transition"
+                title={isMuted ? 'Nyalakan Suara Musik' : 'Bisukan Suara Musik'}
+              >
+                {isMuted ? (
+                  <VolumeX className="w-4 h-4 text-red-400" />
+                ) : (
+                  <Volume2 className="w-4 h-4 text-emerald-400" />
+                )}
+              </button>
+            )}
+
             {isMyStory && (
               <button
                 type="button"
@@ -242,7 +335,7 @@ export function StoryViewerModal({
 
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleCloseModal}
               className="p-2 rounded-full hover:bg-white/10 text-white/80 hover:text-white transition"
               title="Tutup"
             >
@@ -250,6 +343,54 @@ export function StoryViewerModal({
             </button>
           </div>
         </div>
+
+        {/* Instagram-Style Music Pill Sticker on Story */}
+        {currentStory.song_data && (
+          <div className="absolute top-18 inset-x-4 z-30 flex justify-center pointer-events-none animate-fadeIn">
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsMuted((prev) => !prev);
+              }}
+              className="pointer-events-auto flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-black/65 backdrop-blur-md border border-white/20 text-white shadow-xl max-w-[88%] cursor-pointer hover:bg-black/80 transition active:scale-95"
+              title="Ketuk untuk bisukan / bunyikan musik"
+            >
+              {/* Equalizer animation */}
+              <div className="flex items-end gap-[2px] h-3 shrink-0 text-emerald-400">
+                <span
+                  className={`w-[2px] bg-emerald-400 rounded-full transition-all ${
+                    !isPaused && !isViewersListOpen && !isMuted ? 'animate-pulse h-3' : 'h-1.5'
+                  }`}
+                />
+                <span
+                  className={`w-[2px] bg-emerald-400 rounded-full transition-all ${
+                    !isPaused && !isViewersListOpen && !isMuted ? 'animate-bounce h-2.5' : 'h-3'
+                  }`}
+                />
+                <span
+                  className={`w-[2px] bg-emerald-400 rounded-full transition-all ${
+                    !isPaused && !isViewersListOpen && !isMuted ? 'animate-pulse h-2' : 'h-1'
+                  }`}
+                />
+              </div>
+
+              <div className="truncate text-left min-w-0">
+                <p className="text-[11px] font-semibold text-white truncate leading-tight">
+                  {currentStory.song_data.title}
+                </p>
+                <p className="text-[9px] font-mono text-white/60 truncate leading-tight">
+                  {currentStory.song_data.artist}
+                </p>
+              </div>
+
+              {isMuted ? (
+                <VolumeX className="w-3.5 h-3.5 text-red-400 ml-1 shrink-0" />
+              ) : (
+                <Volume2 className="w-3.5 h-3.5 text-emerald-400 ml-1 shrink-0" />
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Story Content Canvas */}
         <div className="flex-1 relative flex items-center justify-center overflow-hidden">

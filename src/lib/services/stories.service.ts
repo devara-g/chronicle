@@ -66,6 +66,7 @@ export const StoriesService = {
                 full_name: 'User',
                 avatar_url: '',
               },
+              song_data: row.song_data ? (typeof row.song_data === 'string' ? JSON.parse(row.song_data) : row.song_data) : null,
               views_count: mappedViews.length,
               viewers: mappedViews,
             };
@@ -186,7 +187,7 @@ export const StoriesService = {
     return { myGroup, friendsGroups };
   },
 
-  // Buat Story Baru (Image atau Text)
+  // Buat Story Baru (Image atau Text dengan opsi Musik resmi)
   async createStory(
     user: Profile,
     storyData: {
@@ -195,6 +196,7 @@ export const StoriesService = {
       text_content?: string | null;
       bg_gradient?: string;
       caption?: string | null;
+      song_data?: any | null;
     }
   ): Promise<StoryItem> {
     const now = new Date();
@@ -208,6 +210,7 @@ export const StoriesService = {
       text_content: storyData.text_content || null,
       bg_gradient: storyData.bg_gradient || 'from-[#0d1117] via-[#161b22] to-[#010409]',
       caption: storyData.caption || null,
+      song_data: storyData.song_data || null,
       created_at: now.toISOString(),
       expires_at: expiresAt.toISOString(),
       author: user,
@@ -231,7 +234,7 @@ export const StoriesService = {
     // 2. Simpan ke Supabase jika ada tabelnya
     if (isSupabaseConfigured()) {
       try {
-        await supabase.from('user_stories').insert({
+        const { error: insertError } = await supabase.from('user_stories').insert({
           id: newStory.id,
           user_id: user.id,
           media_url: newStory.media_url,
@@ -239,9 +242,26 @@ export const StoriesService = {
           text_content: newStory.text_content,
           bg_gradient: newStory.bg_gradient,
           caption: newStory.caption,
+          song_data: newStory.song_data,
           created_at: newStory.created_at,
           expires_at: newStory.expires_at,
         });
+
+        // Jika kolom song_data belum ada di skema DB Supabase user, fallback insert tanpa kolom tsb
+        if (insertError) {
+          console.warn('Supabase story insert primary error, attempting fallback:', insertError.message);
+          await supabase.from('user_stories').insert({
+            id: newStory.id,
+            user_id: user.id,
+            media_url: newStory.media_url,
+            media_type: newStory.media_type,
+            text_content: newStory.text_content,
+            bg_gradient: newStory.bg_gradient,
+            caption: newStory.caption,
+            created_at: newStory.created_at,
+            expires_at: newStory.expires_at,
+          });
+        }
 
         // Broadcast realtime
         const ch = supabase.channel('global_stories_feed');
