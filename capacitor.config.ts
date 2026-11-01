@@ -1,0 +1,37 @@
+import type { CapacitorConfig } from '@capacitor/cli';
+
+const config: CapacitorConfig = {
+  appId: 'com.stitch.chronicle',
+  appName: 'Chronicle',
+  webDir: 'public',
+  server: {
+    url: 'https://lchronicle.vercel.app',
+    cleartext: true,
+    androidScheme: 'https',
+  },
+  android: {
+    allowMixedContent: true,
+    backgroundColor: '#050505',
+  },
+  plugins: {
+    SplashScreen: {
+      launchShowDuration: 1800,
+      backgroundColor: '#050505',
+      showSpinner: false,
+      androidScaleType: 'CENTER_CROP',
+      splashFullScreen: true,
+      splashImmersive: true,
+    },
+    StatusBar: {
+      style: 'DARK',
+      backgroundColor: '#050505',
+    },
+    Keyboard: {
+      resize: 'body',
+      style: 'DARK',
+    },
+  },
+};
+
+export default config;
+
