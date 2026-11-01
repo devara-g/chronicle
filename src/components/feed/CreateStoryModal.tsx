@@ -19,11 +19,14 @@ import {
   Upload,
   Sliders,
   Disc,
+  AtSign,
+  UserPlus,
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { StoriesService } from '@/lib/services/stories.service';
 import { StorageService } from '@/lib/services/storage.service';
-import { StorySong } from '@/types';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
+import { StorySong, Profile } from '@/types';
 
 interface CreateStoryModalProps {
   isOpen: boolean;
@@ -58,8 +61,8 @@ export function CreateStoryModal({ isOpen, onClose, onStoryCreated }: CreateStor
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Active view: canvas (story editor) | music_list (search & select) | music_trimmer (IG scrubber)
-  const [currentView, setCurrentView] = useState<'canvas' | 'music_list' | 'music_trimmer'>('canvas');
+  // Active view: canvas (story editor) | music_list (search & select) | music_trimmer (IG scrubber) | tag_picker
+  const [currentView, setCurrentView] = useState<'canvas' | 'music_list' | 'music_trimmer' | 'tag_picker'>('canvas');
 
   // Music State
   const [selectedSong, setSelectedSong] = useState<StorySong | null>(null);
@@ -76,6 +79,12 @@ export function CreateStoryModal({ isOpen, onClose, onStoryCreated }: CreateStor
   const [audioTotalDuration, setAudioTotalDuration] = useState<number>(30);
   const [isTrimmerPlaying, setIsTrimmerPlaying] = useState<boolean>(false);
   const trimmerAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Tag Users State
+  const [taggedUsers, setTaggedUsers] = useState<Profile[]>([]);
+  const [tagQuery, setTagQuery] = useState('');
+  const [tagSearchResults, setTagSearchResults] = useState<Profile[]>([]);
+  const [loadingTags, setLoadingTags] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -149,6 +158,39 @@ export function CreateStoryModal({ isOpen, onClose, onStoryCreated }: CreateStor
     return () => clearTimeout(timer);
   }, [musicQuery, currentView]);
 
+  // Handle tag user search
+  useEffect(() => {
+    if (currentView !== 'tag_picker') return;
+    if (!user) return;
+
+    let isSubscribed = true;
+    const fetchUsers = async () => {
+      setLoadingTags(true);
+      try {
+        if (isSupabaseConfigured()) {
+          let query = supabase.from('profiles').select('*').neq('id', user.id);
+          if (tagQuery.trim()) {
+            query = query.or(`username.ilike.%${tagQuery.trim()}%,full_name.ilike.%${tagQuery.trim()}%`);
+          }
+          const { data } = await query.limit(12);
+          if (isSubscribed) setTagSearchResults(data || []);
+        } else {
+          setTagSearchResults([]);
+        }
+      } catch (e) {
+        console.warn('Tag users search error:', e);
+      } finally {
+        if (isSubscribed) setLoadingTags(false);
+      }
+    };
+
+    const timer = setTimeout(fetchUsers, 200);
+    return () => {
+      isSubscribed = false;
+      clearTimeout(timer);
+    };
+  }, [tagQuery, currentView, user]);
+
   if (!mounted || !isOpen || !user) return null;
 
   // Toggle quick preview in list
@@ -184,7 +226,6 @@ export function CreateStoryModal({ isOpen, onClose, onStoryCreated }: CreateStor
     setTrimDuration(initialDur);
     setCurrentView('music_trimmer');
 
-    // Create audio for trimmer and detect total duration
     const audio = new Audio(song.previewUrl);
     audio.volume = 0.85;
     trimmerAudioRef.current = audio;
@@ -203,7 +244,6 @@ export function CreateStoryModal({ isOpen, onClose, onStoryCreated }: CreateStor
       audio.addEventListener('loadedmetadata', onMeta, { once: true });
     }
 
-    // Auto-loop within selected window
     audio.ontimeupdate = () => {
       if (trimmerAudioRef.current) {
         const cur = trimmerAudioRef.current.currentTime;
@@ -227,7 +267,6 @@ export function CreateStoryModal({ isOpen, onClose, onStoryCreated }: CreateStor
     });
   };
 
-  // Seek trimmer audio when user scrubs slider
   const handleScrubAudio = (newStart: number) => {
     setTrimStartTime(newStart);
     if (trimmerAudioRef.current) {
@@ -240,7 +279,6 @@ export function CreateStoryModal({ isOpen, onClose, onStoryCreated }: CreateStor
     }
   };
 
-  // Toggle trimmer audio play/pause
   const handleToggleTrimmerPlay = () => {
     if (!trimmerAudioRef.current) return;
     if (isTrimmerPlaying) {
@@ -259,7 +297,6 @@ export function CreateStoryModal({ isOpen, onClose, onStoryCreated }: CreateStor
     }
   };
 
-  // Confirm trimmed music part and apply to story
   const handleConfirmTrim = () => {
     if (!trimmingSong) return;
     stopAllAudio();
@@ -271,7 +308,6 @@ export function CreateStoryModal({ isOpen, onClose, onStoryCreated }: CreateStor
     setCurrentView('canvas');
   };
 
-  // Upload custom MP3/Audio file from device
   const handleCustomAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -311,6 +347,21 @@ export function CreateStoryModal({ isOpen, onClose, onStoryCreated }: CreateStor
     if (e) e.stopPropagation();
     stopAllAudio();
     setSelectedSong(null);
+  };
+
+  // Toggle Tag a User
+  const handleToggleTagUser = (targetUser: Profile) => {
+    setTaggedUsers((prev) => {
+      const exists = prev.some((u) => u.id === targetUser.id);
+      if (exists) {
+        return prev.filter((u) => u.id !== targetUser.id);
+      }
+      if (prev.length >= 6) {
+        alert('Maksimal dapat menandai 6 orang teman.');
+        return prev;
+      }
+      return [...prev, targetUser];
+    });
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -381,12 +432,14 @@ export function CreateStoryModal({ isOpen, onClose, onStoryCreated }: CreateStor
         bg_gradient: mode === 'text' ? selectedGradient : undefined,
         caption: mode === 'image' ? caption.trim() : null,
         song_data: selectedSong,
+        tagged_users: taggedUsers,
       });
 
       handleResetImage();
       setTextContent('');
       setCaption('');
       setSelectedSong(null);
+      setTaggedUsers([]);
       setCurrentView('canvas');
       onStoryCreated();
       onClose();
@@ -410,9 +463,144 @@ export function CreateStoryModal({ isOpen, onClose, onStoryCreated }: CreateStor
         className="w-full max-w-md bg-[#0f0f0f] border border-white/15 rounded-3xl overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.95)] flex flex-col max-h-[92vh] relative z-10"
       >
         {/* ======================================================== */}
-        {/* TAMPILAN 1: MUSIC TRIMMER / SCRUBBER (INSTAGRAM STYLE) */}
+        {/* TAMPILAN 1: TAG FRIENDS PICKER */}
         {/* ======================================================== */}
-        {currentView === 'music_trimmer' && trimmingSong ? (
+        {currentView === 'tag_picker' ? (
+          <div className="flex flex-col h-[520px] max-h-[85vh] animate-fadeIn">
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setCurrentView('canvas')}
+                  className="p-1.5 rounded-full text-white/60 hover:text-white hover:bg-white/10 transition"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+                <div className="flex items-center gap-2">
+                  <AtSign className="w-4 h-4 text-emerald-400" />
+                  <h3 className="font-headline font-bold text-white text-sm">Tandai Teman ({taggedUsers.length})</h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCurrentView('canvas')}
+                className="px-4 py-1.5 rounded-full bg-emerald-400 hover:bg-emerald-300 text-black font-headline font-bold text-xs transition active:scale-95 shadow-[0_0_15px_rgba(52,211,153,0.5)]"
+              >
+                Selesai
+              </button>
+            </div>
+
+            {/* Search Input Bar */}
+            <div className="p-3 border-b border-white/10 bg-white/[0.02]">
+              <div className="flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-2xl px-3.5 py-2 text-xs text-white focus-within:border-emerald-400/50 transition">
+                <Search className="w-4 h-4 text-white/40 shrink-0" />
+                <input
+                  type="text"
+                  autoFocus
+                  value={tagQuery}
+                  onChange={(e) => setTagQuery(e.target.value)}
+                  placeholder="Cari username atau nama teman..."
+                  className="w-full bg-transparent border-none text-xs text-white placeholder:text-white/30 focus:outline-none"
+                />
+                {loadingTags && <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400 shrink-0" />}
+                {tagQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setTagQuery('')}
+                    className="p-0.5 text-white/40 hover:text-white"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Selected Chips */}
+            {taggedUsers.length > 0 && (
+              <div className="px-4 py-2 border-b border-white/5 flex flex-wrap gap-1.5 bg-white/[0.01]">
+                {taggedUsers.map((u) => (
+                  <span
+                    key={u.id}
+                    className="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-mono text-[11px] flex items-center gap-1.5"
+                  >
+                    <span>@{u.username}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleTagUser(u)}
+                      className="hover:text-red-400 transition"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* User List */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-1.5 divide-y divide-white/5">
+              {loadingTags && tagSearchResults.length === 0 ? (
+                <div className="p-8 flex flex-col items-center justify-center text-center text-white/40 space-y-2">
+                  <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />
+                  <p className="text-xs font-mono">Mencari teman...</p>
+                </div>
+              ) : tagSearchResults.length === 0 ? (
+                <div className="p-8 flex flex-col items-center justify-center text-center text-white/40 space-y-2">
+                  <AtSign className="w-8 h-8 opacity-40 text-emerald-400" />
+                  <p className="text-xs font-mono">Tidak ada teman ditemukan</p>
+                  <p className="text-[11px] text-white/30">Coba cari dengan username atau nama lain.</p>
+                </div>
+              ) : (
+                tagSearchResults.map((u) => {
+                  const isTagged = taggedUsers.some((item) => item.id === u.id);
+                  return (
+                    <div
+                      key={u.id}
+                      onClick={() => handleToggleTagUser(u)}
+                      className={`flex items-center justify-between p-2 rounded-2xl hover:bg-white/[0.06] transition-colors cursor-pointer group ${
+                        isTagged ? 'bg-emerald-500/10 border border-emerald-500/20' : ''
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="relative w-10 h-10 rounded-full overflow-hidden bg-neutral-800 border border-white/10 shrink-0">
+                          {u.avatar_url ? (
+                            <Image src={u.avatar_url} alt={u.full_name} fill className="object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-emerald-950 to-teal-800 text-white font-bold text-xs">
+                              {u.full_name?.charAt(0) || 'U'}
+                            </div>
+                          )}
+                        </div>
+                        <div className="truncate min-w-0 pr-2">
+                          <p className="text-xs font-bold text-white truncate leading-tight group-hover:text-emerald-300 transition-colors">
+                            {u.full_name}
+                          </p>
+                          <p className="text-[10px] text-white/50 truncate font-mono mt-0.5">
+                            @{u.username}
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        className={`px-3 py-1.5 rounded-full font-mono text-xs active:scale-95 transition-all shadow-sm ${
+                          isTagged
+                            ? 'bg-emerald-400 text-black font-bold'
+                            : 'bg-white/10 hover:bg-white/20 text-white'
+                        }`}
+                      >
+                        {isTagged ? 'Ditandai' : '+ Tandai'}
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        ) : currentView === 'music_trimmer' && trimmingSong ? (
+          /* ======================================================== */
+          /* TAMPILAN 2: MUSIC TRIMMER / SCRUBBER (INSTAGRAM STYLE) */
+          /* ======================================================== */
           <div className="flex flex-col h-[520px] max-h-[85vh] animate-fadeIn">
             {/* Trimmer Header */}
             <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
@@ -580,7 +768,7 @@ export function CreateStoryModal({ isOpen, onClose, onStoryCreated }: CreateStor
           </div>
         ) : currentView === 'music_list' ? (
           /* ======================================================== */
-          /* TAMPILAN 2: MUSIC SEARCH & SUGGESTIONS DRAWER */
+          /* TAMPILAN 3: MUSIC SEARCH & SUGGESTIONS DRAWER */
           /* ======================================================== */
           <div className="flex flex-col h-[520px] max-h-[85vh] animate-fadeIn">
             {/* Header */}
@@ -760,7 +948,7 @@ export function CreateStoryModal({ isOpen, onClose, onStoryCreated }: CreateStor
           </div>
         ) : (
           /* ======================================================== */
-          /* TAMPILAN 3: STORY CREATOR CANVAS (UTAMA) */
+          /* TAMPILAN 4: STORY CREATOR CANVAS (UTAMA) */
           /* ======================================================== */
           <>
             {/* Header */}
@@ -810,7 +998,7 @@ export function CreateStoryModal({ isOpen, onClose, onStoryCreated }: CreateStor
             <div className="p-4 sm:p-5 flex-1 overflow-y-auto space-y-4">
               {mode === 'text' ? (
                 <>
-                  {/* Text Preview Box with Instagram Music Sticker */}
+                  {/* Text Preview Box with Instagram Music Sticker & Tagged Friends */}
                   <div
                     className={`w-full aspect-[9/12] max-h-[290px] rounded-2xl bg-gradient-to-br ${selectedGradient} p-5 flex items-center justify-center text-center shadow-inner relative overflow-hidden border border-white/10`}
                   >
@@ -866,6 +1054,28 @@ export function CreateStoryModal({ isOpen, onClose, onStoryCreated }: CreateStor
                       </div>
                     )}
 
+                    {/* Tagged Friends Pills on Text Canvas */}
+                    {taggedUsers.length > 0 && (
+                      <div className="absolute bottom-3 inset-x-3 z-20 flex flex-wrap gap-1 justify-center">
+                        {taggedUsers.map((u) => (
+                          <span
+                            key={u.id}
+                            className="px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md border border-emerald-400/30 text-white font-mono text-[10px] flex items-center gap-1 shadow-md"
+                          >
+                            <span className="text-emerald-400">@</span>
+                            <span>{u.username}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleTagUser(u)}
+                              className="hover:text-red-400"
+                            >
+                              <X className="w-2.5 h-2.5" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
                     <textarea
                       value={textContent}
                       onChange={(e) => setTextContent(e.target.value)}
@@ -897,7 +1107,7 @@ export function CreateStoryModal({ isOpen, onClose, onStoryCreated }: CreateStor
                 </>
               ) : (
                 <>
-                  {/* Image Preview / Upload Box with Instagram Music Sticker */}
+                  {/* Image Preview / Upload Box with Instagram Music Sticker & Tagged Friends */}
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -962,6 +1172,28 @@ export function CreateStoryModal({ isOpen, onClose, onStoryCreated }: CreateStor
                         </div>
                       )}
 
+                      {/* Tagged Friends Pills on Photo */}
+                      {taggedUsers.length > 0 && (
+                        <div className="absolute bottom-3 inset-x-3 z-20 flex flex-wrap gap-1 justify-center">
+                          {taggedUsers.map((u) => (
+                            <span
+                              key={u.id}
+                              className="px-2 py-0.5 rounded-full bg-black/75 backdrop-blur-md border border-emerald-400/40 text-white font-mono text-[10px] flex items-center gap-1 shadow-md"
+                            >
+                              <span className="text-emerald-400">@</span>
+                              <span>{u.username}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleTagUser(u)}
+                                className="hover:text-red-400"
+                              >
+                                <X className="w-2.5 h-2.5" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
                       <button
                         type="button"
                         onClick={handleResetImage}
@@ -997,8 +1229,9 @@ export function CreateStoryModal({ isOpen, onClose, onStoryCreated }: CreateStor
                 </>
               )}
 
-              {/* Music Attachment Button Bar */}
-              <div className="pt-1">
+              {/* Music & Tag Friends Attachment Bar */}
+              <div className="space-y-2 pt-1">
+                {/* Music Row */}
                 {selectedSong ? (
                   <div className="flex items-center gap-2">
                     <button
@@ -1032,9 +1265,24 @@ export function CreateStoryModal({ isOpen, onClose, onStoryCreated }: CreateStor
                     className="w-full py-2.5 px-3 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-emerald-400/40 text-white/80 hover:text-white text-xs font-mono flex items-center justify-center gap-2 transition shadow-sm"
                   >
                     <Music className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>+ Tambah Musik & Atur Bagian Lagu (seperti IG)</span>
+                    <span>+ Tambah Musik & Atur Bagian Lagu</span>
                   </button>
                 )}
+
+                {/* Tag Friends Row */}
+                <button
+                  type="button"
+                  onClick={() => setCurrentView('tag_picker')}
+                  className="w-full py-2 px-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 hover:border-emerald-400/30 text-white/70 hover:text-white text-xs font-mono flex items-center justify-between transition"
+                >
+                  <div className="flex items-center gap-2">
+                    <AtSign className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Tandai Teman (@tag)</span>
+                  </div>
+                  <span className="text-[11px] text-emerald-400 font-semibold">
+                    {taggedUsers.length > 0 ? `${taggedUsers.length} teman ditandai` : '+ Pilih teman'}
+                  </span>
+                </button>
               </div>
             </div>
 

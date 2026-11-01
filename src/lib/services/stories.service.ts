@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { Profile, StoryItem, StoryViewer, UserStoriesGroup } from '@/types';
+import { NotificationsService } from './notifications.service';
 
 const LOCAL_STORAGE_STORIES_KEY = 'chronicle_shared_stories_pool';
 const LOCAL_STORAGE_SEEN_KEY = 'chronicle_seen_stories_set';
@@ -67,6 +68,7 @@ export const StoriesService = {
                 avatar_url: '',
               },
               song_data: row.song_data ? (typeof row.song_data === 'string' ? JSON.parse(row.song_data) : row.song_data) : null,
+              tagged_users: row.tagged_users ? (typeof row.tagged_users === 'string' ? JSON.parse(row.tagged_users) : row.tagged_users) : [],
               views_count: mappedViews.length,
               viewers: mappedViews,
             };
@@ -187,7 +189,7 @@ export const StoriesService = {
     return { myGroup, friendsGroups };
   },
 
-  // Buat Story Baru (Image atau Text dengan opsi Musik resmi)
+  // Buat Story Baru (Image atau Text dengan opsi Musik resmi & Tag Teman)
   async createStory(
     user: Profile,
     storyData: {
@@ -197,6 +199,7 @@ export const StoriesService = {
       bg_gradient?: string;
       caption?: string | null;
       song_data?: any | null;
+      tagged_users?: Profile[] | null;
     }
   ): Promise<StoryItem> {
     const now = new Date();
@@ -211,6 +214,7 @@ export const StoriesService = {
       bg_gradient: storyData.bg_gradient || 'from-[#0d1117] via-[#161b22] to-[#010409]',
       caption: storyData.caption || null,
       song_data: storyData.song_data || null,
+      tagged_users: storyData.tagged_users || [],
       created_at: now.toISOString(),
       expires_at: expiresAt.toISOString(),
       author: user,
@@ -243,11 +247,12 @@ export const StoriesService = {
           bg_gradient: newStory.bg_gradient,
           caption: newStory.caption,
           song_data: newStory.song_data,
+          tagged_users: newStory.tagged_users,
           created_at: newStory.created_at,
           expires_at: newStory.expires_at,
         });
 
-        // Jika kolom song_data belum ada di skema DB Supabase user, fallback insert tanpa kolom tsb
+        // Jika kolom song_data/tagged_users belum ada di skema DB Supabase user, fallback insert bertahap
         if (insertError) {
           console.warn('Supabase story insert primary error, attempting fallback:', insertError.message);
           await supabase.from('user_stories').insert({
@@ -261,6 +266,15 @@ export const StoriesService = {
             created_at: newStory.created_at,
             expires_at: newStory.expires_at,
           });
+        }
+
+        // 3. Kirim notifikasi mention ke teman yang ditag
+        if (newStory.tagged_users && newStory.tagged_users.length > 0) {
+          for (const friend of newStory.tagged_users) {
+            if (friend.id && friend.id !== user.id) {
+              NotificationsService.createNotification(friend.id, user.id, 'mention');
+            }
+          }
         }
 
         // Broadcast realtime

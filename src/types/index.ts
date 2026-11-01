@@ -109,6 +109,7 @@ export interface StoryItem {
   bg_gradient?: string;
   caption?: string | null;
   song_data?: StorySong | null;
+  tagged_users?: Profile[] | null;
   created_at: string;
   expires_at: string;
   author: Profile;
