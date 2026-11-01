@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import { X, ChevronLeft, ChevronRight, Trash2, Eye } from 'lucide-react';
 import { UserStoriesGroup, StoryItem } from '@/types';
@@ -26,10 +27,15 @@ export function StoryViewerModal({
   onStoryDeleted,
 }: StoryViewerModalProps) {
   const { user } = useApp();
+  const [mounted, setMounted] = useState(false);
   const [currentGroupIdx, setCurrentGroupIdx] = useState(initialGroupIndex);
   const [currentStoryIdx, setCurrentStoryIdx] = useState(0);
   const [progress, setProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const timerRef = useRef<any>(null);
   const startTimeRef = useRef<number>(Date.now());
@@ -132,11 +138,11 @@ export function StoryViewerModal({
     }
   };
 
-  if (!isOpen || !currentGroup || !currentStory) return null;
+  if (!mounted || !isOpen || !currentGroup || !currentStory) return null;
 
   const isMyStory = user && currentStory.user_id === user.id;
 
-  return (
+  const modalContent = (
     <div className="fixed inset-0 z-[99999] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-0 sm:p-4 select-none animate-fadeIn">
       {/* Container Card */}
       <div
@@ -293,5 +299,7 @@ export function StoryViewerModal({
       </button>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }
 

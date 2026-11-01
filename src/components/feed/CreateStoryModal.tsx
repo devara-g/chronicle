@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import { X, Image as ImageIcon, Type, Sparkles, Loader2, Check } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
@@ -23,6 +24,7 @@ const GRADIENTS = [
 
 export function CreateStoryModal({ isOpen, onClose, onStoryCreated }: CreateStoryModalProps) {
   const { user } = useApp();
+  const [mounted, setMounted] = useState(false);
   const [mode, setMode] = useState<'text' | 'image'>('text');
   const [selectedGradient, setSelectedGradient] = useState(GRADIENTS[1].class);
   const [textContent, setTextContent] = useState('');
@@ -32,7 +34,11 @@ export function CreateStoryModal({ isOpen, onClose, onStoryCreated }: CreateStor
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  if (!isOpen || !user) return null;
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted || !isOpen || !user) return null;
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -109,11 +115,14 @@ export function CreateStoryModal({ isOpen, onClose, onStoryCreated }: CreateStor
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-xl flex items-center justify-center p-3 sm:p-4 select-none animate-fadeIn">
+  const modalContent = (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-xl flex items-center justify-center p-3 sm:p-4 select-none animate-fadeIn"
+    >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md bg-[#0f0f0f] border border-white/15 rounded-3xl overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.95)] flex flex-col max-h-[90vh]"
+        className="w-full max-w-md bg-[#0f0f0f] border border-white/15 rounded-3xl overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.95)] flex flex-col max-h-[90vh] relative z-10"
       >
         {/* Header */}
         <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
@@ -269,5 +278,6 @@ export function CreateStoryModal({ isOpen, onClose, onStoryCreated }: CreateStor
       </div>
     </div>
   );
-}
 
+  return createPortal(modalContent, document.body);
+}
