@@ -1,11 +1,46 @@
 import { Profile } from '@/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 
 export const AuthService = {
   // Sign in with Google OAuth
   async signInWithGoogle() {
     if (!isSupabaseConfigured()) return { error: new Error('Supabase not configured') };
-    const redirectTo = `${window.location.origin}/auth/callback`;
+
+    const isNative = typeof window !== 'undefined' && Capacitor.isNativePlatform();
+    const redirectTo = isNative
+      ? 'https://lchronicle.vercel.app/auth/callback?native=true'
+      : `${window.location.origin}/auth/callback`;
+
+    if (isNative) {
+      // On Android/iOS native app: skip automatic redirect so we get the authorization URL,
+      // then open it securely in Chrome Custom Tabs (trusted by Google OAuth).
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
+      });
+
+      if (error) {
+        console.error('[AuthService] Native OAuth error:', error);
+        return { error };
+      }
+
+      if (data?.url) {
+        await Browser.open({ url: data.url, windowName: '_blank' });
+      }
+
+      return { data, error: null };
+    }
+
+    // Standard web browser flow
     return await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {

@@ -41,6 +41,7 @@
   <div style="font-size: 11px; color: #666; font-family: monospace;">DIGITAL NOIR MICROBLOG</div>
   <div class="spinner"></div>
   <script>
+    // Redirect to Vercel production server if not loaded by capacitor server config
     setTimeout(function() {
       if (window.location.hostname !== 'lchronicle.vercel.app') {
         window.location.href = "https://lchronicle.vercel.app";

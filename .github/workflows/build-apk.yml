@@ -4,11 +4,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'android/**'
-      - 'capacitor.config.ts'
-      - 'public/**'
-      - '.github/workflows/build-apk.yml'
   workflow_dispatch:
 
 jobs:

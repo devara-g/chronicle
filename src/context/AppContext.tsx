@@ -8,6 +8,7 @@ import { NotificationsService } from '@/lib/services/notifications.service';
 import { MessagesService } from '@/lib/services/messages.service';
 import { StorageService } from '@/lib/services/storage.service';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
+import { Capacitor } from '@capacitor/core';
 
 interface AppContextType {
   user: Profile | null;
@@ -146,8 +147,74 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           loadData();
         }
       });
+
+      // Capacitor Native Deep Link & OAuth Listener
+      let cleanupAppUrl: (() => void) | undefined;
+      if (typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
+        import('@capacitor/app').then(({ App }) => {
+          // Handle cold launch URL
+          App.getLaunchUrl().then(async (launchUrl) => {
+            if (launchUrl?.url) {
+              handleDeepLinkUrl(launchUrl.url);
+            }
+          });
+
+          // Handle active app resume / url open
+          const urlListener = App.addListener('appUrlOpen', async (event) => {
+            handleDeepLinkUrl(event.url);
+          });
+
+          cleanupAppUrl = () => {
+            urlListener.then((l) => l.remove());
+          };
+
+          async function handleDeepLinkUrl(rawUrl: string) {
+            try {
+              const { Browser } = await import('@capacitor/browser');
+              await Browser.close().catch(() => {});
+
+              let paramsString = '';
+              if (rawUrl.includes('#')) {
+                paramsString = rawUrl.split('#')[1];
+              } else if (rawUrl.includes('?')) {
+                paramsString = rawUrl.split('?')[1];
+              }
+
+              const searchParams = new URLSearchParams(paramsString);
+              const accessToken = searchParams.get('access_token');
+              const refreshToken = searchParams.get('refresh_token');
+              const code = searchParams.get('code');
+
+              if (accessToken && refreshToken) {
+                const { error: sessionError } = await supabase.auth.setSession({
+                  access_token: accessToken,
+                  refresh_token: refreshToken,
+                });
+                if (!sessionError) {
+                  await loadData();
+                  if (window.location.pathname.includes('/login') || window.location.pathname.includes('/signup')) {
+                    window.location.href = '/';
+                  }
+                }
+              } else if (code) {
+                const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+                if (!exchangeError) {
+                  await loadData();
+                  if (window.location.pathname.includes('/login') || window.location.pathname.includes('/signup')) {
+                    window.location.href = '/';
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn('[Chronicle Native] Failed to handle deep link URL:', e);
+            }
+          }
+        });
+      }
+
       return () => {
         authSub.subscription.unsubscribe();
+        if (cleanupAppUrl) cleanupAppUrl();
       };
     }
   }, []);

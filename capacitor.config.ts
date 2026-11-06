@@ -8,6 +8,11 @@ const config: CapacitorConfig = {
     url: 'https://lchronicle.vercel.app',
     cleartext: true,
     androidScheme: 'https',
+    allowNavigation: [
+      'lchronicle.vercel.app',
+      '*.supabase.co',
+      'accounts.google.com',
+    ],
   },
   android: {
     allowMixedContent: true,

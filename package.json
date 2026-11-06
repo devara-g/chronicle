@@ -13,6 +13,8 @@
     "@ai-sdk/groq": "^4.0.28",
     "@ai-sdk/react": "^4.0.69",
     "@capacitor/android": "^8.6.0",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/browser": "^8.0.5",
     "@capacitor/cli": "^8.6.0",
     "@capacitor/core": "^8.6.0",
     "@capacitor/keyboard": "^8.0.6",

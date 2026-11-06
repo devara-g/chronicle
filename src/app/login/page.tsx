@@ -21,6 +21,27 @@ function LoginContent() {
   const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>([]);
 
   useEffect(() => {
+    if (isSupabaseConfigured()) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          router.push('/');
+          router.refresh();
+        }
+      });
+
+      const { data: authSub } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (session?.user) {
+          router.push('/');
+          router.refresh();
+        }
+      });
+      return () => {
+        authSub.subscription.unsubscribe();
+      };
+    }
+  }, [router]);
+
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
         const stored = JSON.parse(localStorage.getItem('chronicle_saved_accounts') || '[]');
@@ -70,6 +91,7 @@ function LoginContent() {
     }
 
     router.push('/');
+    router.refresh();
   };
 
   return (

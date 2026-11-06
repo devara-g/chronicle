@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
+import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { Image as ImageIcon, Smile, BarChart2, Sparkles, X } from 'lucide-react';
 import Image from 'next/image';
@@ -117,7 +118,7 @@ export function ComposePost({ placeholder = "What's happening in the noir?", onS
     return (
       <div className="p-6 border-b border-white/10 text-center bg-white/[0.02]">
         <p className="text-sm text-on-surface-variant font-mono mb-3">Sign in to write a chronicle.</p>
-        <a href="/login" className="inline-block bg-primary text-black font-headline font-bold py-2 px-6 rounded-full text-sm hover:bg-white/90 transition-all">Sign In</a>
+        <Link href="/login" className="inline-block bg-primary text-black font-headline font-bold py-2 px-6 rounded-full text-sm hover:bg-white/90 transition-all">Sign In</Link>
       </div>
     );
   }
