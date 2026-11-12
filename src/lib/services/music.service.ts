@@ -87,12 +87,23 @@ export const MusicService = {
     }
   },
 
-  // Get playable stream endpoint (YouTube Music full track -> Deezer -> iTunes fallback)
+  // Get playable stream endpoint (Instant direct CDN preview -> Deezer -> YouTube fallback)
   async getPlayStream(
     title: string,
     artist: string,
     fallbackPreviewUrl?: string
   ): Promise<PlayStreamInfo> {
+    // If a direct high-speed audio preview is already present, use it directly
+    // to avoid proxy latency and ensure 100% immediate playback without serverless IP blocks.
+    if (fallbackPreviewUrl && fallbackPreviewUrl.startsWith('http')) {
+      return {
+        success: true,
+        source: 'itunes',
+        streamUrl: fallbackPreviewUrl,
+        directUrl: fallbackPreviewUrl,
+      };
+    }
+
     const defaultStreamUrl = `/api/music/play?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}&previewUrl=${encodeURIComponent(fallbackPreviewUrl || '')}&stream=true`;
 
     try {
@@ -109,9 +120,9 @@ export const MusicService = {
       const data = await res.json();
       return {
         success: true,
-        source: data.source || 'youtube',
+        source: data.source || 'itunes',
         duration: data.duration,
-        streamUrl: data.streamUrl || defaultStreamUrl,
+        streamUrl: data.streamUrl || fallbackPreviewUrl || defaultStreamUrl,
         directUrl: data.directUrl,
       };
     } catch (err) {

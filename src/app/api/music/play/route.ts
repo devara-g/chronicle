@@ -30,7 +30,40 @@ async function resolveAudioSource(
 
   const query = `${title} ${artist}`.trim();
 
-  // 1. Try Invidious / YouTube Music instances
+  // 1. First try Deezer (fast, open CDN, no datacenter IP blocking)
+  try {
+    const deezerRes = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(query)}`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (deezerRes.ok) {
+      const dData = await deezerRes.json();
+      const top = dData.data?.[0];
+      if (top?.preview) {
+        const info: AudioSourceInfo = {
+          audioUrl: top.preview,
+          source: 'deezer',
+          duration: top.duration,
+          format: 'audio/mpeg',
+        };
+        resolvedCache.set(cacheKey, { info, expiresAt: Date.now() + 2 * 60 * 60 * 1000 });
+        return info;
+      }
+    }
+  } catch {
+    // Continue to next options
+  }
+
+  // 2. Fallback: Provided direct iTunes preview URL
+  if (fallbackPreviewUrl && fallbackPreviewUrl.startsWith('http')) {
+    return {
+      audioUrl: fallbackPreviewUrl,
+      source: 'itunes',
+      duration: 30,
+      format: 'audio/x-m4a',
+    };
+  }
+
+  // 3. Fallback: Try Invidious / YouTube Music instances
   for (const base of INVIDIOUS_INSTANCES) {
     try {
       const searchRes = await fetch(`${base}/api/v1/search?q=${encodeURIComponent(query)}&type=video`, {
@@ -54,7 +87,6 @@ async function resolveAudioSource(
       const videoData = await videoRes.json();
       const adaptiveFormats = videoData.adaptiveFormats || [];
 
-      // Find best audio format (prefer m4a/audio/mp4 or audio/webm)
       const audioFormat =
         adaptiveFormats.find((f: any) => f.type?.includes('audio/mp4')) ||
         adaptiveFormats.find((f: any) => f.type?.startsWith('audio/'));
@@ -66,46 +98,12 @@ async function resolveAudioSource(
           duration: videoData.lengthSeconds ? Number(videoData.lengthSeconds) : undefined,
           format: audioFormat.type || 'audio/mp4',
         };
-        // Cache for 30 minutes (YouTube stream URLs expire after a few hours)
         resolvedCache.set(cacheKey, { info, expiresAt: Date.now() + 30 * 60 * 1000 });
         return info;
       }
     } catch {
       // Continue to next instance
     }
-  }
-
-  // 2. Fallback: Deezer preview (high quality MP3)
-  try {
-    const deezerRes = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(query)}`, {
-      signal: AbortSignal.timeout(3000),
-    });
-    if (deezerRes.ok) {
-      const dData = await deezerRes.json();
-      const top = dData.data?.[0];
-      if (top?.preview) {
-        const info: AudioSourceInfo = {
-          audioUrl: top.preview,
-          source: 'deezer',
-          duration: top.duration,
-          format: 'audio/mpeg',
-        };
-        resolvedCache.set(cacheKey, { info, expiresAt: Date.now() + 2 * 60 * 60 * 1000 });
-        return info;
-      }
-    }
-  } catch {
-    // Continue to fallback preview
-  }
-
-  // 3. Fallback: Provided iTunes preview URL
-  if (fallbackPreviewUrl) {
-    return {
-      audioUrl: fallbackPreviewUrl,
-      source: 'itunes',
-      duration: 30,
-      format: 'audio/x-m4a',
-    };
   }
 
   return null;
@@ -167,9 +165,14 @@ export async function GET(req: Request) {
       fetchHeaders['Range'] = rangeHeader;
     }
 
-    const upstreamRes = await fetch(audioSource.audioUrl, {
+    let upstreamRes = await fetch(audioSource.audioUrl, {
       headers: fetchHeaders,
     });
+
+    // If upstream audio failed (e.g. 403 Forbidden from YouTube), fallback immediately to previewUrl
+    if (upstreamRes.status >= 400 && previewUrl && audioSource.audioUrl !== previewUrl) {
+      upstreamRes = await fetch(previewUrl, { headers: fetchHeaders });
+    }
 
     const responseHeaders = new Headers();
     responseHeaders.set('Content-Type', upstreamRes.headers.get('content-type') || audioSource.format || 'audio/mp4');

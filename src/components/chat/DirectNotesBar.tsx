@@ -128,7 +128,7 @@ export function DirectNotesBar() {
       audioRef.current.pause();
     }
 
-    const audioUrl = song.streamUrl || song.previewUrl;
+    const audioUrl = song.previewUrl || song.streamUrl;
     if (!audioUrl) return;
 
     const audio = new Audio(audioUrl);
@@ -147,7 +147,15 @@ export function DirectNotesBar() {
     }
 
     audio.onended = () => setPlayingSongId(null);
-    audio.onerror = () => setPlayingSongId(null);
+    audio.onerror = () => {
+      // Automatic fallback if current url failed
+      if (song.previewUrl && audio.src !== song.previewUrl) {
+        audio.src = song.previewUrl;
+        audio.play().catch(() => setPlayingSongId(null));
+      } else {
+        setPlayingSongId(null);
+      }
+    };
 
     audio
       .play()
@@ -479,7 +487,7 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
 
   // Audio preview setup for trimmer
   useEffect(() => {
-    const playUrl = selectedSong?.streamUrl || selectedSong?.previewUrl;
+    const playUrl = selectedSong?.previewUrl || selectedSong?.streamUrl;
     if (playUrl) {
       if (trimmerAudioRef.current) {
         trimmerAudioRef.current.pause();
@@ -498,14 +506,21 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
         );
       }
       a.onended = () => setIsPlayingPreview(false);
-      a.onerror = () => setIsPlayingPreview(false);
+      a.onerror = () => {
+        if (selectedSong?.previewUrl && a.src !== selectedSong.previewUrl) {
+          a.src = selectedSong.previewUrl;
+          a.play().then(() => setIsPlayingPreview(true)).catch(() => setIsPlayingPreview(false));
+        } else {
+          setIsPlayingPreview(false);
+        }
+      };
       trimmerAudioRef.current = a;
     }
     return () => {
       trimmerAudioRef.current?.pause();
       searchPreviewAudioRef.current?.pause();
     };
-  }, [selectedSong?.streamUrl, selectedSong?.previewUrl]);
+  }, [selectedSong?.previewUrl, selectedSong?.streamUrl]);
 
   const toggleTrimmerPlayback = () => {
     if (!trimmerAudioRef.current) return;
@@ -1018,7 +1033,7 @@ function RevealNoteModal({
   // Audio setup and auto-play
   useEffect(() => {
     const song = note.song;
-    const playUrl = song?.streamUrl || song?.previewUrl;
+    const playUrl = song?.previewUrl || song?.streamUrl;
     if (song && playUrl) {
       setLoadingAudio(true);
       const audio = new Audio(playUrl);
@@ -1049,8 +1064,16 @@ function RevealNoteModal({
 
       audio.onended = () => setIsPlaying(false);
       audio.onerror = () => {
-        setLoadingAudio(false);
-        setIsPlaying(false);
+        if (song.previewUrl && audio.src !== song.previewUrl) {
+          audio.src = song.previewUrl;
+          audio.play().then(() => setIsPlaying(true)).catch(() => {
+            setLoadingAudio(false);
+            setIsPlaying(false);
+          });
+        } else {
+          setLoadingAudio(false);
+          setIsPlaying(false);
+        }
       };
 
       audio
