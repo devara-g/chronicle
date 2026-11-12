@@ -160,3 +160,77 @@ body {
 /* ─── Scrollbar hide utility ─────────────────────────────────────────────── */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ─── Liquid Glass Cards & Panels (iOS-grade Optical Glass) ─────────────── */
+.liquid-glass-card {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.09) 0%,
+    rgba(255, 255, 255, 0.03) 40%,
+    rgba(0, 0, 0, 0.55) 100%
+  );
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.35),
+    0 12px 36px rgba(0, 0, 0, 0.7);
+}
+
+.liquid-glass-card-hover {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.liquid-glass-card-hover:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.13) 0%,
+    rgba(255, 255, 255, 0.05) 40%,
+    rgba(0, 0, 0, 0.65) 100%
+  );
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow:
+    inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.5),
+    0 16px 48px rgba(0, 0, 0, 0.85);
+}
+
+.liquid-glass-bubble {
+  background: linear-gradient(
+    175deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(255, 255, 255, 0.05) 50%,
+    rgba(15, 15, 15, 0.75) 100%
+  );
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow:
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.45),
+    0 8px 24px rgba(0, 0, 0, 0.6);
+}
+
+.liquid-glass-input {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.liquid-glass-input:focus {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.30);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 16px rgba(255, 255, 255, 0.10);
+  outline: none;
+}
+
+/* ─── Equalizer Animations ────────────────────────────────────────────────── */
+@keyframes eq1 { 0%, 100% { height: 4px; } 50% { height: 14px; } }
+@keyframes eq2 { 0%, 100% { height: 14px; } 50% { height: 5px; } }
+@keyframes eq3 { 0%, 100% { height: 8px; } 50% { height: 16px; } }
+@keyframes eq4 { 0%, 100% { height: 12px; } 50% { height: 4px; } }
+
+.animate-eq-1 { animation: eq1 0.8s ease-in-out infinite; }
+.animate-eq-2 { animation: eq2 0.7s ease-in-out infinite 0.15s; }
+.animate-eq-3 { animation: eq3 0.85s ease-in-out infinite 0.3s; }
+.animate-eq-4 { animation: eq4 0.75s ease-in-out infinite 0.2s; }
+

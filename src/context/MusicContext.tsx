@@ -3,12 +3,17 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { useApp } from '@/context/AppContext';
+import { MusicService, SyncedLyricLine } from '@/lib/services/music.service';
 
 export interface TrackInfo {
   title: string;
   artist: string;
   previewUrl: string;
   coverUrl?: string | null;
+  duration?: number;
+  startTime?: number;
+  source?: 'youtube' | 'deezer' | 'itunes' | 'local';
+  lyricSnippet?: string;
 }
 
 interface MusicContextType {
@@ -16,12 +21,17 @@ interface MusicContextType {
   isPlaying: boolean;
   progress: number;
   duration: number;
-  playTrack: (track: TrackInfo) => void;
+  currentTime: number;
+  lyrics: SyncedLyricLine[];
+  currentLyricLine: SyncedLyricLine | null;
+  isLoadingAudio: boolean;
+  playTrack: (track: TrackInfo, options?: { autoLyrics?: boolean; startTime?: number }) => void;
   pauseTrack: () => void;
   resumeTrack: () => void;
   togglePlay: () => void;
   stopTrack: () => void;
   seekTrack: (ratio: number) => void;
+  seekToTime: (seconds: number) => void;
   playAmbient: (type: 'rain' | 'cyber' | 'lofi') => void;
 }
 
@@ -54,6 +64,10 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [lyrics, setLyrics] = useState<SyncedLyricLine[]>([]);
+  const [currentLyricLine, setCurrentLyricLine] = useState<SyncedLyricLine | null>(null);
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -64,81 +78,144 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
       audioRef.current = audio;
 
       const onTimeUpdate = () => {
-        if (audio.duration && !isNaN(audio.duration)) {
-          setProgress(audio.currentTime / audio.duration);
+        const cur = audio.currentTime;
+        setCurrentTime(cur);
+        if (audio.duration && !isNaN(audio.duration) && audio.duration > 0) {
+          setProgress(cur / audio.duration);
         }
       };
 
       const onLoadedMetadata = () => {
+        setIsLoadingAudio(false);
         if (audio.duration && !isNaN(audio.duration)) {
           setDuration(Math.round(audio.duration));
         }
       };
 
+      const onWaiting = () => {
+        setIsLoadingAudio(true);
+      };
+
+      const onCanPlay = () => {
+        setIsLoadingAudio(false);
+      };
+
       const onEnded = () => {
         setIsPlaying(false);
         setProgress(0);
+        setCurrentTime(0);
       };
 
       audio.addEventListener('timeupdate', onTimeUpdate);
       audio.addEventListener('loadedmetadata', onLoadedMetadata);
+      audio.addEventListener('waiting', onWaiting);
+      audio.addEventListener('canplay', onCanPlay);
       audio.addEventListener('ended', onEnded);
 
       return () => {
         audio.pause();
         audio.removeEventListener('timeupdate', onTimeUpdate);
         audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+        audio.removeEventListener('waiting', onWaiting);
+        audio.removeEventListener('canplay', onCanPlay);
         audio.removeEventListener('ended', onEnded);
         audioRef.current = null;
       };
     }
   }, []);
 
-  // Broadcast current listening track to friends
-  const broadcastListeningStatus = useCallback((track: TrackInfo | null) => {
-    if (typeof window !== 'undefined' && user) {
-      try {
-        const payload = {
-          userId: user.id,
-          username: user.username,
-          track: track,
-          timestamp: Date.now(),
-        };
-        localStorage.setItem(`chronicle_listening_${user.id}`, JSON.stringify(payload));
-        window.dispatchEvent(new Event('chronicle_listening_updated'));
-
-        if (isSupabaseConfigured()) {
-          const ch = supabase.channel('global_listening_feed');
-          ch.send({
-            type: 'broadcast',
-            event: 'user_listening',
-            payload,
-          });
-        }
-      } catch (e) {}
-    }
-  }, [user]);
-
-  const playTrack = useCallback((track: TrackInfo) => {
-    if (!audioRef.current) return;
-
-    if (currentTrack?.previewUrl === track.previewUrl && isPlaying) {
+  // Update active synced lyric line based on currentTime
+  useEffect(() => {
+    if (lyrics.length === 0) {
+      setCurrentLyricLine(null);
       return;
     }
 
-    audioRef.current.src = track.previewUrl;
-    audioRef.current.volume = 0.85;
-    audioRef.current
-      .play()
-      .then(() => {
-        setCurrentTrack(track);
-        setIsPlaying(true);
-        broadcastListeningStatus(track);
-      })
-      .catch((err) => {
-        console.warn('[MusicContext] Play error:', err);
-      });
-  }, [currentTrack, isPlaying, broadcastListeningStatus]);
+    // Find the latest line with time <= currentTime
+    let activeLine: SyncedLyricLine | null = null;
+    for (let i = 0; i < lyrics.length; i++) {
+      if (lyrics[i].time <= currentTime + 0.3) {
+        activeLine = lyrics[i];
+      } else {
+        break;
+      }
+    }
+    setCurrentLyricLine(activeLine);
+  }, [currentTime, lyrics]);
+
+  // Broadcast current listening track to friends
+  const broadcastListeningStatus = useCallback(
+    (track: TrackInfo | null) => {
+      if (typeof window !== 'undefined' && user) {
+        try {
+          const payload = {
+            userId: user.id,
+            username: user.username,
+            track: track,
+            timestamp: Date.now(),
+          };
+          localStorage.setItem(`chronicle_listening_${user.id}`, JSON.stringify(payload));
+          window.dispatchEvent(new Event('chronicle_listening_updated'));
+
+          if (isSupabaseConfigured()) {
+            const ch = supabase.channel('global_listening_feed');
+            ch.send({
+              type: 'broadcast',
+              event: 'user_listening',
+              payload,
+            });
+          }
+        } catch {}
+      }
+    },
+    [user]
+  );
+
+  const playTrack = useCallback(
+    (track: TrackInfo, options?: { autoLyrics?: boolean; startTime?: number }) => {
+      if (!audioRef.current) return;
+
+      const isSameTrack = currentTrack?.previewUrl === track.previewUrl;
+      if (isSameTrack && isPlaying) {
+        return;
+      }
+
+      setIsLoadingAudio(true);
+      audioRef.current.src = track.previewUrl;
+      audioRef.current.volume = 0.88;
+
+      if (options?.startTime !== undefined && options.startTime > 0) {
+        audioRef.current.currentTime = options.startTime;
+      } else if (track.startTime !== undefined && track.startTime > 0) {
+        audioRef.current.currentTime = track.startTime;
+      }
+
+      audioRef.current
+        .play()
+        .then(() => {
+          setCurrentTrack(track);
+          setIsPlaying(true);
+          setIsLoadingAudio(false);
+          broadcastListeningStatus(track);
+        })
+        .catch((err) => {
+          console.warn('[MusicContext] Play error:', err);
+          setIsLoadingAudio(false);
+        });
+
+      // Optionally fetch lyrics
+      if (options?.autoLyrics !== false) {
+        MusicService.getLyrics(track.title, track.artist).then((data) => {
+          if (data.found && data.lines.length > 0) {
+            setLyrics(data.lines);
+          } else {
+            setLyrics([]);
+          }
+        });
+      }
+    },
+    [currentTrack, isPlaying, broadcastListeningStatus]
+  );
 
   const pauseTrack = useCallback(() => {
     if (audioRef.current) {
@@ -172,22 +249,40 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
     setCurrentTrack(null);
     setIsPlaying(false);
     setProgress(0);
+    setCurrentTime(0);
+    setLyrics([]);
+    setCurrentLyricLine(null);
     broadcastListeningStatus(null);
   }, [broadcastListeningStatus]);
 
   const seekTrack = useCallback((ratio: number) => {
     if (audioRef.current && audioRef.current.duration) {
-      audioRef.current.currentTime = ratio * audioRef.current.duration;
+      const target = ratio * audioRef.current.duration;
+      audioRef.current.currentTime = target;
       setProgress(ratio);
+      setCurrentTime(target);
     }
   }, []);
 
-  const playAmbient = useCallback((type: 'rain' | 'cyber' | 'lofi') => {
-    const preset = AMBIENT_PRESETS[type];
-    if (preset) {
-      playTrack(preset);
+  const seekToTime = useCallback((seconds: number) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = seconds;
+      setCurrentTime(seconds);
+      if (audioRef.current.duration) {
+        setProgress(seconds / audioRef.current.duration);
+      }
     }
-  }, [playTrack]);
+  }, []);
+
+  const playAmbient = useCallback(
+    (type: 'rain' | 'cyber' | 'lofi') => {
+      const preset = AMBIENT_PRESETS[type];
+      if (preset) {
+        playTrack(preset, { autoLyrics: false });
+      }
+    },
+    [playTrack]
+  );
 
   return (
     <MusicContext.Provider
@@ -196,12 +291,17 @@ export function MusicProvider({ children }: { children: React.ReactNode }) {
         isPlaying,
         progress,
         duration,
+        currentTime,
+        lyrics,
+        currentLyricLine,
+        isLoadingAudio,
         playTrack,
         pauseTrack,
         resumeTrack,
         togglePlay,
         stopTrack,
         seekTrack,
+        seekToTime,
         playAmbient,
       }}
     >
@@ -217,4 +317,3 @@ export function useMusic() {
   }
   return ctx;
 }
-
