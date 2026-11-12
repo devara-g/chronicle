@@ -33,7 +33,52 @@ export interface PlayStreamInfo {
   directUrl?: string;
 }
 
+export interface TrackPlayData {
+  success: boolean;
+  videoId: string | null;
+  title: string;
+  artist: string;
+  source: 'youtube' | 'fallback';
+  fallbackAudioUrl: string | null;
+}
+
 export const MusicService = {
+  // Resolve official YouTube full-track videoId for 1:1 lyric sync
+  async getYouTubeTrack(
+    title: string,
+    artist: string,
+    fallbackPreviewUrl?: string
+  ): Promise<TrackPlayData> {
+    try {
+      const params = new URLSearchParams();
+      params.set('title', title);
+      params.set('artist', artist);
+      if (fallbackPreviewUrl) params.set('previewUrl', fallbackPreviewUrl);
+
+      const res = await fetch(`/api/music/play?${params.toString()}`);
+      if (!res.ok) {
+        return {
+          success: false,
+          videoId: null,
+          title,
+          artist,
+          source: 'fallback',
+          fallbackAudioUrl: fallbackPreviewUrl || null,
+        };
+      }
+      return await res.json();
+    } catch {
+      return {
+        success: false,
+        videoId: null,
+        title,
+        artist,
+        source: 'fallback',
+        fallbackAudioUrl: fallbackPreviewUrl || null,
+      };
+    }
+  },
+
   // Search catalog (Spotify primary, iTunes fallback)
   async searchSongs(query: string, limit: number = 10): Promise<SongResult[]> {
     if (!query?.trim()) return this.getSuggestions();

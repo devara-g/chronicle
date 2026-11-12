@@ -20,8 +20,6 @@ import {
   Trash2,
   Users,
   Mic2,
-  ChevronRight,
-  Headphones,
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase/client';
 import { NotesService } from '@/lib/services/notes.service';
@@ -40,6 +38,7 @@ export interface NoteSong {
   duration?: number;
   lyricSnippet?: string;
   streamUrl?: string;
+  videoId?: string | null;
 }
 
 export interface UserNote {
@@ -62,15 +61,11 @@ function formatSeconds(secs?: number): string {
 
 export function DirectNotesBar() {
   const { user, friendIds } = useApp();
-  const { playTrack } = useMusic();
+  const { playTrack, currentTrack, isPlaying, pauseTrack, resumeTrack } = useMusic();
   const [myNote, setMyNote] = useState<UserNote | null>(null);
   const [friendsNotes, setFriendsNotes] = useState<UserNote[]>([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [revealedNote, setRevealedNote] = useState<UserNote | null>(null);
-
-  // Audio playback state
-  const [playingSongId, setPlayingSongId] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const loadNotes = async () => {
     if (!user) return;
@@ -118,72 +113,29 @@ export function DirectNotesBar() {
     const song = note.song;
     if (!song) return;
 
-    if (playingSongId === note.id) {
-      audioRef.current?.pause();
-      setPlayingSongId(null);
-      return;
-    }
+    const isThisTrackPlaying =
+      isPlaying &&
+      currentTrack?.title?.toLowerCase() === song.title.toLowerCase() &&
+      currentTrack?.artist?.toLowerCase() === song.artist.toLowerCase();
 
-    if (audioRef.current) {
-      audioRef.current.pause();
-    }
-
-    const audioUrl = song.previewUrl || song.streamUrl;
-    if (!audioUrl) return;
-
-    const audio = new Audio(audioUrl);
-    audio.volume = 0.88;
-
-    if (song.startTime && song.startTime > 0) {
-      audio.addEventListener(
-        'loadedmetadata',
-        () => {
-          try {
-            audio.currentTime = song.startTime || 0;
-          } catch {}
+    if (isThisTrackPlaying) {
+      pauseTrack();
+    } else {
+      playTrack(
+        {
+          title: song.title,
+          artist: song.artist,
+          previewUrl: song.previewUrl,
+          coverUrl: song.coverUrl,
+          startTime: song.startTime || 0,
+          duration: song.duration,
+          videoId: song.videoId,
+          lyricSnippet: song.lyricSnippet,
         },
-        { once: true }
+        { autoLyrics: true, startTime: song.startTime || 0 }
       );
     }
-
-    audio.onended = () => setPlayingSongId(null);
-    audio.onerror = () => {
-      // Automatic fallback if current url failed
-      if (song.previewUrl && audio.src !== song.previewUrl) {
-        audio.src = song.previewUrl;
-        audio.play().catch(() => setPlayingSongId(null));
-      } else {
-        setPlayingSongId(null);
-      }
-    };
-
-    audio
-      .play()
-      .then(() => {
-        audioRef.current = audio;
-        setPlayingSongId(note.id);
-        // Sync with global player
-        playTrack(
-          {
-            title: song.title,
-            artist: song.artist,
-            previewUrl: audioUrl,
-            coverUrl: song.coverUrl,
-            startTime: song.startTime,
-            duration: song.duration,
-            lyricSnippet: song.lyricSnippet,
-          },
-          { autoLyrics: true }
-        );
-      })
-      .catch(() => setPlayingSongId(null));
   };
-
-  useEffect(() => {
-    return () => {
-      if (audioRef.current) audioRef.current.pause();
-    };
-  }, []);
 
   const handleSaveNote = async (data: { text: string; song: NoteSong | null }) => {
     if (!user) return;
@@ -198,6 +150,11 @@ export function DirectNotesBar() {
     setMyNote(null);
     setRevealedNote(null);
   };
+
+  const isMyNotePlaying =
+    isPlaying &&
+    myNote?.song &&
+    currentTrack?.title?.toLowerCase() === myNote.song.title.toLowerCase();
 
   return (
     <>
@@ -226,9 +183,9 @@ export function DirectNotesBar() {
                       <div className="flex items-center gap-1.5 text-left">
                         {/* Animated Equalizer */}
                         <div className="flex items-end gap-[1.5px] h-3 w-3 shrink-0 text-sky-400">
-                          <span className={`w-[2px] bg-sky-400 rounded-full ${playingSongId === myNote.id ? 'animate-eq-1' : 'h-1.5'}`} />
-                          <span className={`w-[2px] bg-sky-400 rounded-full ${playingSongId === myNote.id ? 'animate-eq-2' : 'h-2.5'}`} />
-                          <span className={`w-[2px] bg-sky-400 rounded-full ${playingSongId === myNote.id ? 'animate-eq-3' : 'h-1'}`} />
+                          <span className={`w-[2px] bg-sky-400 rounded-full ${isMyNotePlaying ? 'animate-eq-1' : 'h-1.5'}`} />
+                          <span className={`w-[2px] bg-sky-400 rounded-full ${isMyNotePlaying ? 'animate-eq-2' : 'h-2.5'}`} />
+                          <span className={`w-[2px] bg-sky-400 rounded-full ${isMyNotePlaying ? 'animate-eq-3' : 'h-1'}`} />
                         </div>
                         <div className="truncate min-w-0">
                           <p className="font-semibold text-[10px] text-white truncate leading-tight">
@@ -286,7 +243,10 @@ export function DirectNotesBar() {
           {/* Friends' Notes */}
           {/* ======================================================== */}
           {friendsNotes.map((note) => {
-            const isPlayingThis = playingSongId === note.id;
+            const isPlayingThis =
+              isPlaying &&
+              note.song &&
+              currentTrack?.title?.toLowerCase() === note.song.title.toLowerCase();
 
             return (
               <div
@@ -409,7 +369,7 @@ export function DirectNotesBar() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Modal Buat Catatan (Liquid Glass UI, Full Scrubber, Synced Lyrics Picker)
+// Modal Buat Catatan (Full Track Scrubber & Synced Lyrics Picker)
 // ─────────────────────────────────────────────────────────────────────────────
 interface CreateNoteModalProps {
   isOpen: boolean;
@@ -421,6 +381,7 @@ interface CreateNoteModalProps {
 
 function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteModalProps) {
   const { user } = useApp();
+  const { playTrack, pauseTrack, seekToTime, isPlaying, currentTrack, currentTime } = useMusic();
   const [mounted, setMounted] = useState(false);
   const [text, setText] = useState(initialNote?.text || '');
   const [selectedSong, setSelectedSong] = useState<NoteSong | null>(initialNote?.song || null);
@@ -431,20 +392,12 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
   const [suggestedSongs, setSuggestedSongs] = useState<SongResult[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
-  // Audio preview & trimming states
+  // Audio trimming & lyrics states
   const [startTime, setStartTime] = useState<number>(initialNote?.song?.startTime || 0);
-  const [songDuration, setSongDuration] = useState<number>(initialNote?.song?.duration || 30);
+  const [songDuration, setSongDuration] = useState<number>(initialNote?.song?.duration || 210);
   const [lyricSnippet, setLyricSnippet] = useState<string>(initialNote?.song?.lyricSnippet || '');
-  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
-  const [previewAudioUrl, setPreviewAudioUrl] = useState<string | null>(null);
-  const [isLoadingStream, setIsLoadingStream] = useState(false);
-
-  // Lyrics state
   const [syncedLyrics, setSyncedLyrics] = useState<SyncedLyricLine[]>([]);
   const [loadingLyrics, setLoadingLyrics] = useState(false);
-
-  const trimmerAudioRef = useRef<HTMLAudioElement | null>(null);
-  const searchPreviewAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -454,7 +407,7 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
       .finally(() => setLoadingSuggestions(false));
   }, []);
 
-  // When a song is selected, load its full stream & synced lyrics
+  // When a song is selected, load its YouTube videoId & synced lyrics from LRCLIB
   useEffect(() => {
     if (!selectedSong) return;
 
@@ -463,97 +416,66 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
       .then((data) => {
         if (data.found && data.lines.length > 0) {
           setSyncedLyrics(data.lines);
+          if (data.duration && data.duration > 30) {
+            setSongDuration(data.duration);
+          }
         } else {
           setSyncedLyrics([]);
         }
       })
       .finally(() => setLoadingLyrics(false));
 
-    // Resolve full track stream URL
-    setIsLoadingStream(true);
-    MusicService.getPlayStream(selectedSong.title, selectedSong.artist, selectedSong.previewUrl)
-      .then((streamInfo) => {
-        if (streamInfo.streamUrl) {
-          setSelectedSong((prev) =>
-            prev ? { ...prev, streamUrl: streamInfo.streamUrl, duration: streamInfo.duration || prev.duration } : null
-          );
-          if (streamInfo.duration) {
-            setSongDuration(streamInfo.duration);
-          }
+    // Resolve full YouTube videoId for 100% full-track playback
+    MusicService.getYouTubeTrack(selectedSong.title, selectedSong.artist, selectedSong.previewUrl).then(
+      (yt) => {
+        if (yt.videoId) {
+          setSelectedSong((prev) => (prev ? { ...prev, videoId: yt.videoId } : null));
         }
-      })
-      .finally(() => setIsLoadingStream(false));
+      }
+    );
   }, [selectedSong?.id]);
 
-  // Audio preview setup for trimmer
-  useEffect(() => {
-    const playUrl = selectedSong?.previewUrl || selectedSong?.streamUrl;
-    if (playUrl) {
-      if (trimmerAudioRef.current) {
-        trimmerAudioRef.current.pause();
-      }
-      const a = new Audio(playUrl);
-      a.volume = 0.88;
-      if (startTime > 0) {
-        a.addEventListener(
-          'loadedmetadata',
-          () => {
-            try {
-              a.currentTime = startTime;
-            } catch {}
-          },
-          { once: true }
-        );
-      }
-      a.onended = () => setIsPlayingPreview(false);
-      a.onerror = () => {
-        if (selectedSong?.previewUrl && a.src !== selectedSong.previewUrl) {
-          a.src = selectedSong.previewUrl;
-          a.play().then(() => setIsPlayingPreview(true)).catch(() => setIsPlayingPreview(false));
-        } else {
-          setIsPlayingPreview(false);
-        }
-      };
-      trimmerAudioRef.current = a;
-    }
-    return () => {
-      trimmerAudioRef.current?.pause();
-      searchPreviewAudioRef.current?.pause();
-    };
-  }, [selectedSong?.previewUrl, selectedSong?.streamUrl]);
+  const isSongPlayingNow =
+    isPlaying &&
+    selectedSong &&
+    currentTrack?.title?.toLowerCase() === selectedSong.title.toLowerCase();
 
   const toggleTrimmerPlayback = () => {
-    if (!trimmerAudioRef.current) return;
-    if (isPlayingPreview) {
-      trimmerAudioRef.current.pause();
-      setIsPlayingPreview(false);
+    if (!selectedSong) return;
+    if (isSongPlayingNow) {
+      pauseTrack();
     } else {
-      try {
-        if (trimmerAudioRef.current.readyState >= 1) {
-          trimmerAudioRef.current.currentTime = startTime;
-        }
-      } catch {}
-      trimmerAudioRef.current
-        .play()
-        .then(() => setIsPlayingPreview(true))
-        .catch(() => setIsPlayingPreview(false));
+      playTrack(
+        {
+          title: selectedSong.title,
+          artist: selectedSong.artist,
+          previewUrl: selectedSong.previewUrl,
+          coverUrl: selectedSong.coverUrl,
+          duration: songDuration,
+          videoId: selectedSong.videoId,
+          startTime,
+        },
+        { startTime, autoLyrics: false }
+      );
     }
   };
 
   const handleStartTimeChange = (val: number) => {
     setStartTime(val);
-    if (trimmerAudioRef.current) {
-      try {
-        if (trimmerAudioRef.current.readyState >= 1) {
-          trimmerAudioRef.current.currentTime = val;
-        }
-      } catch {}
-      if (!isPlayingPreview) {
-        trimmerAudioRef.current
-          .play()
-          .then(() => setIsPlayingPreview(true))
-          .catch(() => {});
-      }
+    seekToTime(val);
+    if (!isSongPlayingNow && selectedSong) {
+      playTrack(
+        {
+          title: selectedSong.title,
+          artist: selectedSong.artist,
+          previewUrl: selectedSong.previewUrl,
+          coverUrl: selectedSong.coverUrl,
+          duration: songDuration,
+          videoId: selectedSong.videoId,
+          startTime: val,
+        },
+        { startTime: val, autoLyrics: false }
+      );
     }
   };
 
@@ -573,42 +495,28 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
   };
 
   const handleSelectSong = (song: SongResult) => {
-    if (searchPreviewAudioRef.current) searchPreviewAudioRef.current.pause();
-    setPreviewAudioUrl(null);
+    const defaultDur = song.duration && song.duration > 30 ? song.duration : 210;
     setSelectedSong({
       id: song.id,
       title: song.title,
       artist: song.artist,
       previewUrl: song.previewUrl,
       coverUrl: song.coverUrl,
-      duration: song.duration || 30,
+      duration: defaultDur,
       startTime: 0,
       lyricSnippet: '',
     });
     setStartTime(0);
-    setSongDuration(song.duration || 30);
+    setSongDuration(defaultDur);
     setLyricSnippet('');
     setShowMusicSearch(false);
-  };
 
-  const handleTogglePreview = (e: React.MouseEvent, url: string) => {
-    e.stopPropagation();
-    if (previewAudioUrl === url) {
-      if (searchPreviewAudioRef.current) searchPreviewAudioRef.current.pause();
-      setPreviewAudioUrl(null);
-    } else {
-      if (searchPreviewAudioRef.current) searchPreviewAudioRef.current.pause();
-      const a = new Audio(url);
-      a.volume = 0.85;
-      a.onended = () => setPreviewAudioUrl(null);
-      a.onerror = () => setPreviewAudioUrl(null);
-      a.play()
-        .then(() => {
-          searchPreviewAudioRef.current = a;
-          setPreviewAudioUrl(url);
-        })
-        .catch(() => setPreviewAudioUrl(null));
-    }
+    // Resolve full YouTube track
+    MusicService.getYouTubeTrack(song.title, song.artist, song.previewUrl).then((yt) => {
+      if (yt.videoId) {
+        setSelectedSong((prev) => (prev ? { ...prev, videoId: yt.videoId } : null));
+      }
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -631,7 +539,7 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
   if (!mounted) return null;
 
   const displayedSongs = searchQuery.trim() ? searchResults : suggestedSongs;
-  const maxScrubTime = Math.max(10, songDuration - 15);
+  const maxScrubTime = Math.max(15, songDuration - 15);
 
   const modalContent = (
     <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-2xl flex items-center justify-center p-4 animate-fade-in">
@@ -645,7 +553,10 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
             {initialNote ? 'Edit Catatan' : 'Catatan Baru'}
           </h3>
           <button
-            onClick={onClose}
+            onClick={() => {
+              pauseTrack();
+              onClose();
+            }}
             className="p-1.5 text-white/50 hover:text-white rounded-full bg-white/5 hover:bg-white/10 transition-colors"
           >
             <X className="w-4 h-4" />
@@ -725,69 +636,43 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
 
             {/* Results List */}
             <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1 no-scrollbar">
-              {displayedSongs.map((song) => {
-                const isPreviewing = previewAudioUrl === song.previewUrl;
-
-                return (
-                  <div
-                    key={song.id}
-                    className="flex items-center justify-between p-2 rounded-2xl hover:bg-white/[0.08] transition-colors group"
-                  >
-                    <div
-                      onClick={() => handleSelectSong(song)}
-                      className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
-                    >
-                      <div className="relative w-10 h-10 rounded-xl overflow-hidden bg-neutral-900 border border-white/10 flex items-center justify-center flex-shrink-0 shadow-md">
-                        {song.coverUrl ? (
-                          <img
-                            src={song.coverUrl}
-                            alt=""
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <Music className="w-4 h-4 text-white/40" />
-                        )}
-                      </div>
-
-                      <div className="truncate min-w-0 pr-2">
-                        <p className="text-xs font-semibold text-white truncate leading-tight group-hover:text-sky-300 transition-colors">
-                          {song.title}
-                        </p>
-                        <p className="text-[10px] text-white/50 truncate font-mono mt-0.5">
-                          {song.artist}
-                        </p>
-                      </div>
+              {displayedSongs.map((song) => (
+                <div
+                  key={song.id}
+                  onClick={() => handleSelectSong(song)}
+                  className="flex items-center justify-between p-2 rounded-2xl hover:bg-white/[0.08] transition-colors cursor-pointer group"
+                >
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="relative w-10 h-10 rounded-xl overflow-hidden bg-neutral-900 border border-white/10 flex items-center justify-center flex-shrink-0 shadow-md">
+                      {song.coverUrl ? (
+                        <img
+                          src={song.coverUrl}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <Music className="w-4 h-4 text-white/40" />
+                      )}
                     </div>
 
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <button
-                        type="button"
-                        onClick={(e) => handleTogglePreview(e, song.previewUrl)}
-                        className={`p-2 rounded-full transition-all active:scale-90 ${
-                          isPreviewing
-                            ? 'bg-sky-400 text-black shadow-[0_0_12px_rgba(56,189,248,0.5)]'
-                            : 'bg-white/10 hover:bg-white/20 text-white'
-                        }`}
-                        title={isPreviewing ? 'Stop' : 'Putar preview'}
-                      >
-                        {isPreviewing ? (
-                          <Pause className="w-3.5 h-3.5 fill-black" />
-                        ) : (
-                          <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleSelectSong(song)}
-                        className="px-3.5 py-1.5 rounded-full bg-white text-black font-semibold text-xs hover:bg-white/90 active:scale-95 transition-all shadow-sm"
-                      >
-                        Pilih
-                      </button>
+                    <div className="truncate min-w-0 pr-2">
+                      <p className="text-xs font-semibold text-white truncate leading-tight group-hover:text-sky-300 transition-colors">
+                        {song.title}
+                      </p>
+                      <p className="text-[10px] text-white/50 truncate font-mono mt-0.5">
+                        {song.artist}
+                      </p>
                     </div>
                   </div>
-                );
-              })}
+
+                  <button
+                    type="button"
+                    className="px-3.5 py-1.5 rounded-full bg-white text-black font-semibold text-xs hover:bg-white/90 active:scale-95 transition-all shadow-sm shrink-0"
+                  >
+                    Pilih
+                  </button>
+                </div>
+              ))}
             </div>
 
             <button
@@ -841,6 +726,7 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
                   <button
                     type="button"
                     onClick={() => {
+                      pauseTrack();
                       setSelectedSong(null);
                       setSyncedLyrics([]);
                     }}
@@ -851,7 +737,7 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
                   </button>
                 </div>
 
-                {/* Duration-aware Scrubber */}
+                {/* Duration-aware Scrubber (Real Timeline) */}
                 <div className="pt-2 border-t border-white/10 space-y-2">
                   <div className="flex items-center justify-between text-[11px] font-mono text-white/60">
                     <span className="flex items-center gap-1.5 text-white/80">
@@ -863,8 +749,8 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
                       onClick={toggleTrimmerPlayback}
                       className="flex items-center gap-1 text-sky-400 font-semibold hover:underline"
                     >
-                      {isPlayingPreview ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
-                      <span>{isPlayingPreview ? 'Jeda' : 'Dengar'}</span>
+                      {isSongPlayingNow ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+                      <span>{isSongPlayingNow ? 'Jeda' : 'Dengar'}</span>
                     </button>
                   </div>
 
@@ -888,7 +774,7 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
                 <div className="pt-2 border-t border-white/10 space-y-1.5">
                   <div className="flex items-center gap-1.5 text-[11px] font-mono text-white/60">
                     <Mic2 className="w-3 h-3 text-sky-400" />
-                    <span>Pilih Lirik untuk Catatan (LRCLIB)</span>
+                    <span>Sentuh lirik untuk cuplikan catatan:</span>
                     {loadingLyrics && <Loader2 className="w-3 h-3 animate-spin text-white/40 ml-auto" />}
                   </div>
 
@@ -902,7 +788,9 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
                             type="button"
                             onClick={() => {
                               setLyricSnippet(line.text);
-                              handleStartTimeChange(Math.max(0, Math.floor(line.time)));
+                              const lineSec = Math.max(0, Math.floor(line.time));
+                              setStartTime(lineSec);
+                              seekToTime(lineSec);
                             }}
                             className={`w-full text-left px-2.5 py-1.5 rounded-xl text-[11px] transition-all flex items-center justify-between ${
                               isChosen
@@ -946,7 +834,10 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
               {initialNote && (
                 <button
                   type="button"
-                  onClick={onDelete}
+                  onClick={() => {
+                    pauseTrack();
+                    onDelete();
+                  }}
                   className="px-3.5 py-2 text-xs text-red-400 hover:bg-red-500/10 rounded-xl font-mono transition-colors"
                 >
                   Hapus
@@ -955,7 +846,10 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
               <div className="flex-1 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={() => {
+                    pauseTrack();
+                    onClose();
+                  }}
                   className="px-4 py-2 text-xs text-white/50 hover:text-white rounded-xl transition-colors"
                 >
                   Batal
@@ -979,7 +873,7 @@ function CreateNoteModal({ initialNote, onClose, onSave, onDelete }: CreateNoteM
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Modal Reveal Full Note (Liquid Glass Noir, Full Track Scrubber, Karaoke Lyrics)
+// Modal Reveal Full Note (Full Track Playback & Karaoke Lyrics)
 // ─────────────────────────────────────────────────────────────────────────────
 interface RevealNoteModalProps {
   note: UserNote;
@@ -998,146 +892,67 @@ function RevealNoteModal({
   onClose,
   onEdit,
   onDelete,
-  onPlayDirect,
 }: RevealNoteModalProps) {
   const router = useRouter();
   const { user } = useApp();
+  const {
+    currentTrack,
+    isPlaying,
+    currentTime,
+    duration,
+    lyrics,
+    playTrack,
+    togglePlay,
+    seekToTime,
+  } = useMusic();
+
   const [mounted, setMounted] = useState(false);
   const [replyMessage, setReplyMessage] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(note.song?.startTime || 0);
-  const [duration, setDuration] = useState(note.song?.duration || 30);
-  const [syncedLyrics, setSyncedLyrics] = useState<SyncedLyricLine[]>([]);
-  const [activeLyricIndex, setActiveLyricIndex] = useState<number>(-1);
-  const [loadingAudio, setLoadingAudio] = useState(false);
-
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const lyricsContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
-  }, []);
-
-  // Fetch synced lyrics for the note's song
-  useEffect(() => {
+    // Auto play note's song with full track from startTime
     if (note.song) {
-      MusicService.getLyrics(note.song.title, note.song.artist).then((data) => {
-        if (data.found && data.lines.length > 0) {
-          setSyncedLyrics(data.lines);
-        }
-      });
+      playTrack(
+        {
+          title: note.song.title,
+          artist: note.song.artist,
+          previewUrl: note.song.previewUrl,
+          coverUrl: note.song.coverUrl,
+          startTime: note.song.startTime || 0,
+          duration: note.song.duration,
+          videoId: note.song.videoId,
+          lyricSnippet: note.song.lyricSnippet,
+        },
+        { startTime: note.song.startTime || 0, autoLyrics: true }
+      );
     }
-  }, [note.song?.id]);
+  }, [note.id]);
 
-  // Audio setup and auto-play
+  // Find active lyric index based on global currentTime
+  const activeLyricIndex = lyrics.findIndex((line, i) => {
+    const nextLine = lyrics[i + 1];
+    if (nextLine) {
+      return currentTime >= line.time && currentTime < nextLine.time;
+    }
+    return currentTime >= line.time;
+  });
+
+  // Auto-scroll lyrics smoothly
   useEffect(() => {
-    const song = note.song;
-    const playUrl = song?.previewUrl || song?.streamUrl;
-    if (song && playUrl) {
-      setLoadingAudio(true);
-      const audio = new Audio(playUrl);
-      audio.volume = 0.88;
-
-      if (song.startTime && song.startTime > 0) {
-        audio.addEventListener(
-          'loadedmetadata',
-          () => {
-            try {
-              audio.currentTime = song.startTime || 0;
-            } catch {}
-          },
-          { once: true }
-        );
-      }
-
-      audio.onloadedmetadata = () => {
-        setLoadingAudio(false);
-        if (audio.duration && !isNaN(audio.duration)) {
-          setDuration(Math.round(audio.duration));
-        }
-      };
-
-      audio.ontimeupdate = () => {
-        setCurrentTime(audio.currentTime);
-      };
-
-      audio.onended = () => setIsPlaying(false);
-      audio.onerror = () => {
-        if (song.previewUrl && audio.src !== song.previewUrl) {
-          audio.src = song.previewUrl;
-          audio.play().then(() => setIsPlaying(true)).catch(() => {
-            setLoadingAudio(false);
-            setIsPlaying(false);
-          });
-        } else {
-          setLoadingAudio(false);
-          setIsPlaying(false);
-        }
-      };
-
-      audio
-        .play()
-        .then(() => {
-          setIsPlaying(true);
-          setLoadingAudio(false);
-        })
-        .catch(() => {
-          setIsPlaying(false);
-          setLoadingAudio(false);
-        });
-
-      audioRef.current = audio;
-    }
-
-    return () => {
-      audioRef.current?.pause();
-    };
-  }, [note.song?.streamUrl, note.song?.previewUrl]);
-
-  // Track active lyric line and smooth scroll
-  useEffect(() => {
-    if (syncedLyrics.length === 0) return;
-
-    let index = -1;
-    for (let i = 0; i < syncedLyrics.length; i++) {
-      if (syncedLyrics[i].time <= currentTime + 0.3) {
-        index = i;
-      } else {
-        break;
+    if (lyricsContainerRef.current && activeLyricIndex >= 0) {
+      const lineEl = lyricsContainerRef.current.children[activeLyricIndex] as HTMLElement;
+      if (lineEl) {
+        lineEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
-
-    if (index !== activeLyricIndex) {
-      setActiveLyricIndex(index);
-      // Auto-scroll to active lyric
-      if (lyricsContainerRef.current && index >= 0) {
-        const lineEl = lyricsContainerRef.current.children[index] as HTMLElement;
-        if (lineEl) {
-          lineEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      }
-    }
-  }, [currentTime, syncedLyrics, activeLyricIndex]);
-
-  const toggleAudio = () => {
-    if (!audioRef.current) return;
-    if (isPlaying) {
-      audioRef.current.pause();
-      setIsPlaying(false);
-    } else {
-      audioRef.current
-        .play()
-        .then(() => setIsPlaying(true))
-        .catch(() => {});
-    }
-  };
+  }, [activeLyricIndex]);
 
   const handleSeek = (ratio: number) => {
-    if (audioRef.current && duration > 0) {
-      const targetTime = ratio * duration;
-      audioRef.current.currentTime = targetTime;
-      setCurrentTime(targetTime);
+    if (duration > 0) {
+      seekToTime(ratio * duration);
     }
   };
 
@@ -1161,7 +976,7 @@ function RevealNoteModal({
 
   if (!mounted) return null;
 
-  const modalContent = (
+  return createPortal(
     <div
       onClick={onClose}
       className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-2xl flex items-center justify-center p-4 animate-fade-in"
@@ -1223,13 +1038,13 @@ function RevealNoteModal({
           </div>
         )}
 
-        {/* Song Card with Scrubber & Synced Lyrics */}
+        {/* Song Card with Full-Track Scrubber & Karaoke Synced Lyrics */}
         {note.song && (
           <div className="liquid-glass-card rounded-2xl p-4 space-y-3 relative z-10 overflow-hidden">
             <div className="flex items-center gap-3.5">
               {/* Album Art Frame */}
               <div
-                onClick={toggleAudio}
+                onClick={togglePlay}
                 className="relative w-14 h-14 rounded-2xl overflow-hidden border border-white/25 shadow-xl cursor-pointer flex-shrink-0 group"
               >
                 {note.song.coverUrl ? (
@@ -1272,7 +1087,7 @@ function RevealNoteModal({
 
               {/* Play/Pause Button */}
               <button
-                onClick={toggleAudio}
+                onClick={togglePlay}
                 className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center shadow-lg active:scale-90 transition-transform flex-shrink-0"
                 title={isPlaying ? 'Jeda' : 'Putar'}
               >
@@ -1308,7 +1123,7 @@ function RevealNoteModal({
             </div>
 
             {/* Synced Lyrics Karaoke Scroller */}
-            {syncedLyrics.length > 0 && (
+            {lyrics.length > 0 && (
               <div className="pt-2 border-t border-white/10">
                 <div className="text-[10px] font-mono text-white/40 mb-1 flex items-center gap-1">
                   <Mic2 className="w-3 h-3 text-sky-400" />
@@ -1318,17 +1133,12 @@ function RevealNoteModal({
                   ref={lyricsContainerRef}
                   className="max-h-24 overflow-y-auto space-y-1.5 pr-1 no-scrollbar py-1"
                 >
-                  {syncedLyrics.map((line, idx) => {
+                  {lyrics.map((line, idx) => {
                     const isActive = idx === activeLyricIndex;
                     return (
                       <div
                         key={idx}
-                        onClick={() => {
-                          if (audioRef.current) {
-                            audioRef.current.currentTime = line.time;
-                            setCurrentTime(line.time);
-                          }
-                        }}
+                        onClick={() => seekToTime(line.time)}
                         className={`text-xs transition-all cursor-pointer ${
                           isActive
                             ? 'text-white font-bold text-sm scale-[1.02] text-sky-300'
@@ -1365,7 +1175,6 @@ function RevealNoteModal({
         ) : (
           /* Instagram Style Reply to Note with Quick Reactions */
           <div className="pt-2 border-t border-white/10 space-y-2.5 relative z-10">
-            {/* Quick emoji reactions */}
             <div className="flex items-center justify-around py-1">
               {QUICK_EMOJIS.map((emoji) => (
                 <button
@@ -1379,7 +1188,6 @@ function RevealNoteModal({
               ))}
             </div>
 
-            {/* Direct message reply input */}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -1406,8 +1214,7 @@ function RevealNoteModal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
-
-  return createPortal(modalContent, document.body);
 }
